@@ -1,22 +1,24 @@
 <package>
-  <description brief="tunnel_localizer">
-	Given a map of the tunnel, this node estimates
-	the vertical and lateral position as well as the
-	heading of the quadrotor. The inputs to this algorithm
-	are IMU and information from single/multiple laser 
-	scanner and/or RGB-D sensors.
-  </description>
-  <author>ozaslan</author>
-  <license>BSD</license>
-  <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/tunnel_localizer</url>
-  <depend package="utils"/>
-  <depend package="roscpp"/>
-  <depend package="pcl_ros"/>
-  <depend package="nav_msgs"/>
-  <depend package="sensor_msgs"/>
-  <depend package="pcl_conversions"/>
-  <rosdep name="eigen" />
+	<description brief="tunnel_localizer">
+		Given a map of the tunnel, this node estimates
+		the vertical and lateral position as well as the
+		heading of the quadrotor. The inputs to this algorithm
+		are IMU and information from single/multiple laser 
+		scanner and/or RGB-D sensors.
+	</description>
+	<author>ozaslan</author>
+	<license>BSD</license>
+	<review status="unreviewed" notes=""/>
+	<url>http://ros.org/wiki/tunnel_localizer</url>
+	<depend package="utils"/>
+	<depend package="roscpp"/>
+	<depend package="pcl_ros"/>
+	<depend package="nav_msgs"/>
+	<depend package="sensor_msgs"/>
+	<depend package="pcl_conversions"/>
+	<depend package="visualization_msgs"/>
+	<depend package="calib_params"/>
+	<rosdep name="eigen" />
 </package>
 
 

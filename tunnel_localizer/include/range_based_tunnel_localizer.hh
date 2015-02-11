@@ -3,10 +3,12 @@
 
 #include <cmath>
 #include <vector>
+#include <limits>
 #include <numeric>
 #include <iostream>
 #include <Eigen/Dense>
 #include <pcl/point_types.h>
+#include <pcl/octree/octree.h>
 #include <pcl/registration/icp.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -34,13 +36,16 @@ private:
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _pc;						// Collective pointcloud sensor data
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_aligned;				// '_pc' after being aligned
 	pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> _icp;	// We are going to use functions of this class for pose estimation
+	pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> *_octree;
+	vector<pcl::PointXYZ> _matched_map_pts;
 	Eigen::Matrix4d _pose;  // Pose of the robot (output of ICP registration)
 	Eigen::Matrix6d _fim;	// Fisher information matrix
-	double _fitness_score;	// Wellness of the fit (changed to order of words to make it better understood :) )
+	double _fitness_score;	// Wellness of the fit
 
 	bool _get_covariance(const sensor_msgs::LaserScan &data, Eigen::Matrix3d &cov);
 	bool _get_covariance(const sensor_msgs::PointCloud2 &data, Eigen::Matrix6d &cov);
 public:
+	RangeBasedTunnelLocalizer();
 	// This function resets the internal flags, counters, estimates, clears the
 	// collvective point cloud. If not set explicitely this function is called 
 	// after each 'estimate_pose(...)' function. 
@@ -54,7 +59,7 @@ public:
 	// 'mask' is a boolean vector where a 'false' denotes its corresponding 
 	// data should be negleceted. All data is used if sizes of 'ranges' 
 	// and 'mask' do not match.
-	bool push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask);
+	bool push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id);
 	// This adds pointcloud, possibly from an rgbd sensor,
 	// to the collvective sensor pointcloud.
 	// 'rel_pose' is the pose of the RGBD sensor  in the body frame
@@ -62,7 +67,7 @@ public:
 	// data should be negleced. 'mask' should be indexed in row-major
 	// order. All data is used if the sizes of 'data' and 'mask' do
 	// not match.
-	bool push_rgbd_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::PointCloud2 &data, const vector<char> &mask);
+	bool push_rgbd_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::PointCloud2 &data, const vector<char> &mask, char cluster_id);
 	// This function run the PCL ICP function starting from the 
 	// given initial pose. 'get_pose', 'get_covariance' and 
 	// 'get_fitness_score' function are used to get results.
@@ -99,6 +104,8 @@ public:
 	// gives a score of wellness of the fit. Higher values 
 	// mean a good fit.
 	double get_fitness_score();
+
+	bool get_sensor_map_correspondences(vector<pcl::PointXYZ> &sensor_pts, vector<pcl::PointXYZ> &map_pts);
 };
 
 

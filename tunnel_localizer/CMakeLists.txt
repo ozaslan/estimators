@@ -31,8 +31,10 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #common commands for building c++ executables and libraries
 rosbuild_add_library(rangeBasedTunnelLocalizer src/range_based_tunnel_localizer.cc)
-#target_link_libraries(${PROJECT_NAME} another_library)
+rosbuild_add_library(tunnelLocalizer src/tunnel_localizer.cc)
+#target_link_libraries(${PROJECT_NAME}_node rangeBasedTunnelLocalizer)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
-#rosbuild_add_executable(${PROJECT_NAME}_node src/carters_estimator_node.cc)
+rosbuild_add_executable(${PROJECT_NAME} src/tunnel_localizer_node.cc)
 #target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} tunnelLocalizer rangeBasedTunnelLocalizer)

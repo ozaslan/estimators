@@ -1,0 +1,92 @@
+<!-- 
+Example launch file: launches the scan matcher with pre-recorded data
+-->
+
+<launch>
+
+#### Playback ROSBAG  ##############################
+
+<node	pkg   ="rosbag"
+		name  ="rosbag"
+		type  ="play"
+		output="screen"
+		args  ="--loop --rate=1.0 $(env ROS_DATASET_PATH)/13Jan_khex/3.bag">
+</node>
+
+#### start the Tunnel Localizer ##############################
+
+<node	pkg    = "tunnel_localizer" 
+		name   = "tunnel_localizer" 
+		type   = "tunnel_localizer" 
+		output = "screen">
+		
+		<remap from="~imu"			to="/khex/imu"/>
+		<remap from="~scan/top"		to="/scan/top"/>
+		<remap from="~scan/bottom"	to="/scan/bottom"/>
+		<remap from="~cam/top"		to="/cam0/image"/>
+		<remap from="~cam/bottom"	to="/cam2/image"/>
+		<remap from="~cam/right"	to="/cam1/image"/>
+		<remap from="~cam/left"		to="/cam3/image"/>
+
+		<param name="debug_mode"	value="FALSE"/>
+		<param name="refresh_rate"	value="40.0"/>	
+		<param name="map_path"		value="$(find map_server)/maps/towne_basement.pcd"/>
+		<param name="top_lidar_calib_file"		value="$(find calib_data)/lidar/ins_khex_top_lidar.yaml"/>
+		<param name="bottom_lidar_calib_file"	value="$(find calib_data)/lidar/ins_khex_bottom_lidar.yaml"/>
+		<param name="top_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_top_cam.yaml"/>
+		<param name="right_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_right_cam.yaml"/>
+		<param name="bottom_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_bottom_cam.yaml"/>
+		<param name="left_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_left_cam.yaml"/>
+</node> 
+
+#### start UKF Lite ##############################
+
+<node pkg ="quadrotor_ukf_lite" 
+	  name="quadrotor_ukf" 
+	  type="quadrotor_ukf" 
+	  output="screen">
+      <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
+      <remap from="~imu" to="/khex/imu"/> 
+      <remap from="~odom_slam" to="/tunnel_estimator/odom"/>
+</node> 
+
+#### start RVIZ Visualization ##############################
+
+<node	pkg ="odom_visualization"
+		name="meas_odom_visualization"
+		type="odom_visualization"
+		output="screen">
+		<remap from="~odom" to="/tunnel_localizer/odom"/>
+</node>
+
+<node	pkg ="odom_visualization"
+		name="ukf_odom_visualization"
+		type="odom_visualization"
+		output="screen">
+		<remap from="~odom" to="/quadrotor_ukf/odom"/>
+</node>
+
+<node	pkg="rviz"
+		name="rviz"
+		type="rviz"
+		output="screen">
+		<param name="display-config" value="tunnel_localizer.rviz"/>
+		<param name="fixed-frame"	 value="world"/>
+</node>
+
+</launch>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
