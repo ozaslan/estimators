@@ -153,7 +153,7 @@ bool RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 	origin(2) = curr_pose(2, 3);	
 
 	_matched_map_pts.resize(num_pts);
-	int max_iter = 5;
+	int max_iter = 8;
 	for(int iter = 0 ; iter < max_iter ; iter++){
 		num_valid_pts = 0;
 		for(int i = 0 ; i < num_pts ; i++){
@@ -211,7 +211,7 @@ bool RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 		dTz /= num_valid_pts;
 		x(0) = fabs(x(0)) > 1 ? x(0) / fabs(x(0)) : x(0);
 		//double dyaw = -acos(x(0));
-		double dyaw = -1 * atan2(x(1), x(0));
+		double dyaw = -1.2 * atan2(x(1), x(0));
 		cout << "dyaw = " << dyaw << endl;
 
 		// Update the position
@@ -234,6 +234,9 @@ bool RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 	
 		// Transform points.
 		pcl::transformPointCloud(*_pc, *_pc_aligned, curr_pose);
+
+		//if(fabs(dTz) < 0.01 && fabs(x(2)) < 0.01 && fabs(dyaw) < 1.0/180 * PIi)
+			
 	}
 
 	_pose = curr_pose;

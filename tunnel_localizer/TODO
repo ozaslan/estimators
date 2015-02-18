@@ -1,0 +1,20 @@
+-- Correct the comments related to whether changing the map will affect 
+the internally stored map of RangeBasedTunnelLocalization. I was first 
+using point cloud but later switched to octree. Thus everytime the map 
+changes, octree has to be regenerated. Also remove the internal map since 
+it is no longer used. Also add warnings saying that set_map might cause significant slow-downs.
+
+-- Carry the estimation inside the callback functions instead of the main loop.
+
+-- Since I am using only octree, update set_map functions to set_octree. This will assume that
+the user pre-constructs the tree. This was possible multiple octree generations are going to
+be prevented.
+
+-- Project the tracked point onto the map with projected optical flow vector.
+-- Project the image to assign colors to the point cloud map for visualization
+
+-- In odometry visualization, plot the camera and laser using the calibration params.
+Use triangle list to visualize area spanned by the optical flow vector, back-projections and
+robot center.
+
+-- Incorporate the image masking into tracker and extractor

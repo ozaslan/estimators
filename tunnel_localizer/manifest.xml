@@ -17,7 +17,9 @@
 	<depend package="sensor_msgs"/>
 	<depend package="pcl_conversions"/>
 	<depend package="visualization_msgs"/>
+	<depend package="uniform_feat_tracker"/>
 	<depend package="calib_params"/>
+	<depend package="cv_bridge"/>
 	<rosdep name="eigen" />
 </package>
 

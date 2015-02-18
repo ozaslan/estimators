@@ -381,7 +381,9 @@ void odom_callback(const nav_msgs::Odometry &msg){
 	odom_msg_in = msg;
 }
 
-
+// This function visualizes the residual vectors after ICP.
+// Hence it gives an idea on how well the RangeBasedTunnelLocalizer
+// performs.
 void publish_res_rays(const ros::NodeHandle &n){
 	vector<pcl::PointXYZ> range, map;
 	tunnel_localizer.get_range_map_correspondences(range, map);

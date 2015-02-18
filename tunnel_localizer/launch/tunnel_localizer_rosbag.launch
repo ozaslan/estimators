@@ -10,7 +10,7 @@ Example launch file: launches the scan matcher with pre-recorded data
 		name  ="rosbag"
 		type  ="play"
 		output="screen"
-		args  ="--loop --rate=1.0 $(env ROS_DATASET_PATH)/13Jan_khex/3.bag">
+		args  ="--loop --rate=1.0 $(env ROS_DATASET_PATH)/13Jan_khex/1.bag">
 </node>
 
 #### start the Tunnel Localizer ##############################

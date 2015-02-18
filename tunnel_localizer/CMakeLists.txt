@@ -11,6 +11,8 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
 rosbuild_init()
 
+find_package(cmake_modules REQUIRED)
+
 find_package(Eigen REQUIRED)
 include_directories(${Eigen_INCLUDE_DIRS})
 
@@ -31,10 +33,11 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #common commands for building c++ executables and libraries
 rosbuild_add_library(rangeBasedTunnelLocalizer src/range_based_tunnel_localizer.cc)
+rosbuild_add_library(visionBasedTunnelLocalizer src/vision_based_tunnel_localizer.cc)
 rosbuild_add_library(tunnelLocalizer src/tunnel_localizer.cc)
 #target_link_libraries(${PROJECT_NAME}_node rangeBasedTunnelLocalizer)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
 rosbuild_add_executable(${PROJECT_NAME} src/tunnel_localizer_node.cc)
 #target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME})
-target_link_libraries(${PROJECT_NAME} tunnelLocalizer rangeBasedTunnelLocalizer)
+target_link_libraries(${PROJECT_NAME} tunnelLocalizer rangeBasedTunnelLocalizer visionBasedTunnelLocalizer)
