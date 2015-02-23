@@ -41,7 +41,7 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 	// Reserve required space to prevent repetitive memory allocation
 	_cloud->points.reserve(_cloud->points.size() + data.ranges.size());
 
-	static Eigen::Vector4d pt;
+	Eigen::Vector4d pt;
 	double th = data.angle_min;
 	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
 		if(mask.size() != 0 && mask[i] != cluster_id)
@@ -120,15 +120,17 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 
 	Eigen::MatrixXd A(num_pts, 3);
 	Eigen::VectorXd b(num_pts);
-	static Eigen::Vector3d x, rpy;	// solution to Ax=b, 
-									// roll-pitch-yaw
-	static Eigen::Vector3f pos;	// initial position of the robot.
-								// This is given as argument to ray-caster.
+	Eigen::Vector3d x, rpy;	// solution to Ax=b, 
+							// roll-pitch-yaw
+	Eigen::Vector3f pos;	// initial position of the robot.
+							// This is given as argument to ray-caster.
+	Eigen::Vector3f ray;
+	Eigen::Vector3d res_vec;
 
 	Eigen::Matrix4d curr_pose = init_pose; // 'current' pose after each iteration.
 
 	// container for ray-casting results :
-	static pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>::AlignedPointTVector voxel_centers;
+	pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>::AlignedPointTVector voxel_centers;
 
 	pos = curr_pose.topRightCorner<3, 1>().cast<float>();
 
@@ -140,7 +142,6 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 		_fitness_scores[0] = _fitness_scores[1] = _fitness_scores[2] = 0;
 		for(int i = 0 ; i < num_pts ; i++){
 			// Get the ray in the body frame ()
-			static Eigen::Vector3f ray;
 			ray(0) = _cloud_aligned->points[i].x - pos(0);
 			ray(1) = _cloud_aligned->points[i].y - pos(1);
 			ray(2) = _cloud_aligned->points[i].z - pos(2);
@@ -163,7 +164,6 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 				// this is going to contribute to y and yaw updates only.
 				b(i) = voxel_centers[0].y - pos(1);
 				// Get the residual vector 
-				static Eigen::Vector3d res_vec;
 				res_vec(0) = _cloud_aligned->points[i].x - voxel_centers[0].x;
 				res_vec(1) = _cloud_aligned->points[i].y - voxel_centers[0].y;
 				res_vec(2) = _cloud_aligned->points[i].z - voxel_centers[0].z;
