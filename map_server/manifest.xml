@@ -1,0 +1,17 @@
+<package>
+  <description brief="map_server">
+
+     map_server
+
+  </description>
+  <author>ozaslan</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/map_server</url>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="nav_msgs"/>
+
+</package>
+
+
