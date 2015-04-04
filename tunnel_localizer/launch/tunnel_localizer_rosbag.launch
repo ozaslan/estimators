@@ -6,11 +6,21 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 #### Playback ROSBAG  ##############################
 
-<node	pkg   ="rosbag"
+
+<!--
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex/1.bag" />
+<arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
+-->
+
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/carters_gazebo/1.bag" />
+<arg name="map_path"      value="$(find map_server)/maps/carters_penstock.pcd" />
+
+<node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
-		output="screen"
-		args  ="--loop --rate=1.0 $(env ROS_DATASET_PATH)/13Jan_khex/1.bag">
+    output="screen"
+    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --quiet ">
+    <remap from="raw_imu" to="/khex/imu" />
 </node>
 
 #### start the Tunnel Localizer ##############################
@@ -23,14 +33,14 @@ Example launch file: launches the scan matcher with pre-recorded data
 		<remap from="~imu"			to="/khex/imu"/>
 		<remap from="~scan/top"		to="/scan/top"/>
 		<remap from="~scan/bottom"	to="/scan/bottom"/>
-		<remap from="~cam/top"		to="/cam0/image"/>
-		<remap from="~cam/bottom"	to="/cam2/image"/>
-		<remap from="~cam/right"	to="/cam1/image"/>
-		<remap from="~cam/left"		to="/cam3/image"/>
+		<remap from="~cam/top"		to="/cam1/image"/>
+		<remap from="~cam/bottom"	to="/cam3/image"/>
+		<remap from="~cam/right"	to="/cam2/image"/>
+		<remap from="~cam/left"		to="/cam0/image"/>
 
 		<param name="debug_mode"	value="FALSE"/>
 		<param name="refresh_rate"	value="40.0"/>	
-		<param name="map_path"		value="$(find map_server)/maps/towne_basement.pcd"/>
+		<param name="map_path"		value="$(arg map_path)"/>
 		<param name="top_lidar_calib_file"		value="$(find calib_data)/lidar/ins_khex_top_lidar.yaml"/>
 		<param name="bottom_lidar_calib_file"	value="$(find calib_data)/lidar/ins_khex_bottom_lidar.yaml"/>
 		<param name="top_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_top_cam.yaml"/>

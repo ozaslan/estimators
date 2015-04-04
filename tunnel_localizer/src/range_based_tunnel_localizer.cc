@@ -80,7 +80,7 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 bool RangeBasedTunnelLocalizer::push_rgbd_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::PointCloud2 &data, const vector<char> &mask, char cluster_id, bool clean_start){
 	// ### This still does not incorporate the color information
 	ASSERT(mask.size() == 0 || data.data.size() == mask.size(), "mask and data size should be the same.");
-	ASSERT(cluster_id == 0, "Cluster \"0\" is reserved.");
+	ASSERT(cluster_id != 0, "Cluster \"0\" is reserved.");
 
 	if(clean_start == true)
 		_reset();
