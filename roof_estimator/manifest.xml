@@ -1,0 +1,25 @@
+<package>
+	<description brief="roof_estimator">
+    This node estimates maps the 3D environment 
+    with the two laser scanners and a downward looking
+    camera while simultaneously localizing in it.
+    The inputs to this algorithm are two laser scans,
+    one frame-sequence and IMU.
+	</description>
+	<author>ozaslan</author>
+	<license>BSD</license>
+	<review status="unreviewed" notes=""/>
+	<url>http://ros.org/wiki/roof_estimator</url>
+	<depend package="utils"/>
+	<depend package="roscpp"/>
+	<depend package="nav_msgs"/>
+	<depend package="sensor_msgs"/>
+	<depend package="visualization_msgs"/>
+	<depend package="uniform_feat_tracker"/>
+	<depend package="calib_params"/>
+	<depend package="cv_bridge"/>
+  <rosdep name="eigen" />
+  <depend package="octomap" />
+</package>
+
+
