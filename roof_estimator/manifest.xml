@@ -18,8 +18,9 @@
 	<depend package="uniform_feat_tracker"/>
 	<depend package="calib_params"/>
 	<depend package="cv_bridge"/>
-  <rosdep name="eigen" />
-  <depend package="octomap" />
+	<rosdep name="eigen" />
+	<depend package="octomap" />
+	<depend package="octomap_msgs" />
 </package>
 
 

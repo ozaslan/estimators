@@ -99,8 +99,7 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 	// Initialize '_cloud_aligned' by transforming the collective point cloud
 	// with the initial pose.
 
-  pcl::transformPointCloud(*_cloud, *_cloud_aligned, init_pose);
-
+	pcl::transformPointCloud(*_cloud, *_cloud_aligned, init_pose);
 
 	// Steps : 
 	// (1) - For each ray, find the point of intersection. Use ray-casting of PCL-Octree
@@ -112,16 +111,16 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 	int num_valid_pts = 0;	// # of data points intersecting with the map.
 	double dTz = 0;			// update along the z-coordinate.
 
-	Eigen::MatrixXd A(num_pts, 3);
-	Eigen::VectorXd b(num_pts);
-	Eigen::Vector3d x, rpy;	// solution to Ax=b, 
-							// roll-pitch-yaw
+	Eigen::MatrixXd A(2 * num_pts, 4);
+	Eigen::VectorXd b(2 * num_pts);
+	Eigen::Vector4d x;		// solution to Ax=b, 
+	Eigen::Vector3d rpy;	// roll-pitch-yaw
 	Eigen::Vector3f pos;	// initial position of the robot.
 							// This is given as argument to ray-caster.
 	//Eigen::Vector3f ray;
 	Eigen::Vector3d res_vec;
 
-  octomap::point3d origin, ray, end;
+	octomap::point3d origin, ray, end;
 
 	Eigen::Matrix4d curr_pose = init_pose; // 'current' pose after each iteration.
 
@@ -132,24 +131,187 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 
 	_matched_map_pts.resize(num_pts);
 
+	//cout << "initial pose in the localizer : " << endl;
+	//cout << "curr_pose = " << curr_pose << endl;
+
 	int iter;
 	for(iter = 0 ; iter < _max_iters ; iter++){
+		Eigen::Vector3f prev_point(9999, 9999, 9999);
+		cout << "----------------------------" << endl;
+		cout << "iter = " << iter << endl;
+		//cout << "pose = " << pos  << endl;
 		num_valid_pts = 0;
 		_fitness_scores[0] = _fitness_scores[1] = _fitness_scores[2] = 0;
+
+		origin.x() = pos(0);
+		origin.y() = pos(1);
+		origin.z() = pos(2);
+
+		static vector<octomap::point3d> contour;
+		static vector<bool> ray_cast_suc;
+		contour.resize(num_pts);
+		ray_cast_suc.resize(num_pts);
 		for(int i = 0 ; i < num_pts ; i++){
 			// Get the ray in the body frame ()
 			ray.x() = _cloud_aligned->points[i].x - pos(0);
 			ray.y() = _cloud_aligned->points[i].y - pos(1);
 			ray.z() = _cloud_aligned->points[i].z - pos(2);
-			A(i, 0) =  ray.y();
-			A(i, 1) = -ray.x();
-			A(i, 2) =  1;
+
 			// Fetch only the first intersection point
-		  bool suc = octomap.castRay(origin, ray, end);    
+			//cout << "origin = " << origin << endl;
+			//cout << "ray    = " << ray << endl;
+			bool suc = octomap.castRay(origin, ray, end, true, 19.0);
+			ray_cast_suc[i] = suc;
+			if(suc == true)
+				contour[i] = end;
+			else 
+				contour[i].x() = 9999999;
+		}
+
+		for(int i = 0 ; i < num_pts ; i++){		
+			// If there was no intersection, nullify the effect by zero'ing the corresponding equation
+			if(ray_cast_suc[i] == false){
+				A.block<2, 4>(2 * i, 0).setZero();
+				b(2 * i) = b(2 * i + 1) = 0;
+				_matched_map_pts[i].x = 
+					_matched_map_pts[i].y = 
+					_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
+			} else {
+				octomap::point3d ray_tip;
+				ray_tip.x() = _cloud_aligned->points[i].x;
+				ray_tip.y() = _cloud_aligned->points[i].y;
+				ray_tip.z() = _cloud_aligned->points[i].z;
+
+
+				double min_dist = 9999;
+				int    min_dist_idx = 0;
+				for(int j = 0 ; j < num_pts ; j++){
+					double curr_dist = (ray_tip - contour[j]).norm();
+					if(curr_dist < min_dist){
+						min_dist = curr_dist;
+						min_dist_idx = j;
+					}
+				}
+
+				end = contour[min_dist_idx];
+
+				//cout << "% match #" << i << endl;
+				//cout << ray_tip << endl;
+				//cout << end << endl;		
+
+				// Get the ray in the body frame ()
+				ray.x() = _cloud_aligned->points[i].x - pos(0);
+				ray.y() = _cloud_aligned->points[i].y - pos(1);
+				ray.z() = _cloud_aligned->points[i].z - pos(2);
+				A(2*i, 0) =  ray.x();
+				A(2*i, 1) = -ray.y();
+				A(2*i, 2) =  1;
+				A(2*i, 3) =  0;
+				A(2*i + 1, 0) = ray.y();
+				A(2*i + 1, 1) = ray.x();
+				A(2*i + 1, 2) = 0;
+				A(2*i + 1, 3) = 1;
+
+				// Save the matched point
+				_matched_map_pts[i].x = end.x();
+				_matched_map_pts[i].y = end.y();
+				_matched_map_pts[i].z = end.z();
+				// Use only the y-comp of the residual vector. Because 
+				// this is going to contribute to y and yaw updates only.
+				b(2*i)     = end.x() - pos(0);
+				b(2*i + 1) = end.y() - pos(1);
+				// Get the residual vector 
+				res_vec(0) = _cloud_aligned->points[i].x - end.x();
+				res_vec(1) = _cloud_aligned->points[i].y - end.y();
+				res_vec(2) = _cloud_aligned->points[i].z - end.z();
+
+				/*
+				if(res_vec.norm() > 2.00){
+					A.block<2, 4>(2 * i, 0).setZero();
+					b(2 * i) = b(2 * i + 1) = 0;
+					_matched_map_pts[i].x = 
+						_matched_map_pts[i].y = 
+						_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
+					continue;
+				}
+				*/
+
+				// Update the delta-z-estimate according to the direction of the 
+				// corresponding ray's z component. The update factor is weighed using
+				// ML outlier elimination.
+				dTz += -res_vec(2) * (exp(pow(fabs(ray(2) / ray.norm()), 1.0) - 1));
+				// Calculate a weighing coefficent for ML outlier elimination
+				// regarding y-yaw DOFs
+				
+				double dir_weight = pow(exp(sqrt(ray(0) * ray(0) + ray(1) * ray(1)) / ray.norm()), 2) - 1;
+				double weight = exp(-pow(res_vec.squaredNorm(), 2.5));
+				weight = res_vec.norm() >= 2.50 ? exp(-2.50) : weight;
+				//weight = 1; 
+				//double weight = res_vec.norm() > 0.5 ? 0 : 1;
+				b(2 * i) *= weight * dir_weight;
+				b(2 * i + 1) *= weight * dir_weight;
+				A.block<2, 4>(2 * i, 0) *= weight * dir_weight;
+				
+				//double weight_x = exp(-fabs(res_vec(0) / res_vec.norm()));
+				//double weight_y = exp(-fabs(res_vec(1) / res_vec.norm()));
+				//b(2 * i) *= weight_x;
+				//b(2 * i + 1) *= weight_y;
+				//A.block<1, 4>(2 * i, 0) *= weight_x;
+				//A.block<1, 4>(2 * i + 1, 0) *= weight_y;
+				
+				num_valid_pts++;
+
+				_fitness_scores[0] += res_vec[1] * res_vec[1];
+				_fitness_scores[1] += res_vec[2] * res_vec[2];
+				_fitness_scores[2] += res_vec[1] * res_vec[1] * ray(0) * ray(0);
+			}	
+		}
+
+		/*
+		for(int i = 0 ; i < num_pts ; i++){
+			Eigen::Vector3f curr_point(_cloud_aligned->points[i].x,
+									   _cloud_aligned->points[i].y,
+									   _cloud_aligned->points[i].z);
+			if((curr_point - prev_point).norm() <= 0.05){
+				A.block<2, 4>(2 * i, 0).setZero();
+				b(2 * i) = b(2 * i + 1) = 0;
+				_matched_map_pts[i].x = 
+					_matched_map_pts[i].y = 
+					_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
+				continue; //!!!
+			} else
+				prev_point = curr_point;
+
+
+			// Get the ray in the body frame ()
+			ray.x() = _cloud_aligned->points[i].x - pos(0);
+			ray.y() = _cloud_aligned->points[i].y - pos(1);
+			ray.z() = _cloud_aligned->points[i].z - pos(2);
+			A(2*i, 0) =  ray.x();
+			A(2*i, 1) = -ray.y();
+			A(2*i, 2) =  1;
+			A(2*i, 3) =  0;
+			A(2*i + 1, 0) = ray.y();
+			A(2*i + 1, 1) = ray.x();
+			A(2*i + 1, 2) = 0;
+			A(2*i + 1, 3) = 1;
+
+			origin.x() = pos(0);
+			origin.y() = pos(1);
+			origin.z() = pos(2);
+
+			//cout << "ray = " << ray << endl;
+			// Fetch only the first intersection point
+			bool suc = octomap.castRay(origin, ray, end, true, 19.0);
+		
+			//cout << "BBX Max = " << octomap.getBBXMax() << endl;
+			cout << "origin = " << origin << endl;
+			//cout << "ray    = " << ray    << endl;
+			//cout << "end    = " << end    << endl;
 			// If there is no intersection, nullify the effect by zero'ing the corresponding equation
 			if(suc == false){
-				A.block<1, 3>(i, 0) *= 0;
-				b(i)				 = 0;
+				A.block<2, 4>(2 * i, 0).setZero();
+				b(2 * i) = b(2 * i + 1) = 0;
 				_matched_map_pts[i].x = 
 					_matched_map_pts[i].y = 
 					_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
@@ -160,21 +322,45 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				_matched_map_pts[i].z = end.z();
 				// Use only the y-comp of the residual vector. Because 
 				// this is going to contribute to y and yaw updates only.
-				b(i) = end.y() - pos(1);
+				b(2*i)     = end.x() - pos(0);
+				b(2*i + 1) = end.y() - pos(1);
 				// Get the residual vector 
 				res_vec(0) = _cloud_aligned->points[i].x - end.x();
 				res_vec(1) = _cloud_aligned->points[i].y - end.y();
 				res_vec(2) = _cloud_aligned->points[i].z - end.z();
+
+				if(res_vec.norm() > 2.00){
+					A.block<2, 4>(2 * i, 0).setZero();
+					b(2 * i) = b(2 * i + 1) = 0;
+					_matched_map_pts[i].x = 
+						_matched_map_pts[i].y = 
+						_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
+					continue;
+				}
+
 				// Update the delta-z-estimate according to the direction of the 
 				// corresponding ray's z component. The update factor is weighed using
 				// ML outlier elimination.
-				dTz += -res_vec(2) * (exp(fabs(ray(2) / ray.norm())) - 1);
+				dTz += -res_vec(2) * (exp(pow(fabs(ray(2) / ray.norm()), 1.0) - 1));
 				// Calculate a weighing coefficent for ML outlier elimination
 				// regarding y-yaw DOFs
-				double weight = exp(-pow(res_vec.squaredNorm(), 1.5));
-				b(i) *= weight;
-				A.block<1, 3>(i, 0) *= weight;
-
+				
+				double dir_weight = pow(exp(sqrt(ray(0) * ray(0) + ray(1) * ray(1)) / ray.norm()), 2) - 1;
+				double weight = exp(-pow(res_vec.squaredNorm(), 0.5));
+				weight = res_vec.norm() >= 2.50 ? exp(-2.50) : weight;
+				//weight = 1; 
+				//double weight = res_vec.norm() > 0.5 ? 0 : 1;
+				b(2 * i) *= weight * dir_weight;
+				b(2 * i + 1) *= weight * dir_weight;
+				A.block<2, 4>(2 * i, 0) *= weight * dir_weight;
+				
+				//double weight_x = exp(-fabs(res_vec(0) / res_vec.norm()));
+				//double weight_y = exp(-fabs(res_vec(1) / res_vec.norm()));
+				//b(2 * i) *= weight_x;
+				//b(2 * i + 1) *= weight_y;
+				//A.block<1, 4>(2 * i, 0) *= weight_x;
+				//A.block<1, 4>(2 * i + 1, 0) *= weight_y;
+				
 				num_valid_pts++;
 
 				_fitness_scores[0] += res_vec[1] * res_vec[1];
@@ -182,9 +368,15 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				_fitness_scores[2] += res_vec[1] * res_vec[1] * ray(0) * ray(0);
 			}
 		}
+		*/
+
+		//cout << "A = " << A << endl;
+		//cout << "b = " << b << endl;
 
 		// Solve for the least squares solution.
 		x = (A.transpose() * A).inverse() * A.transpose() * b;
+
+		//cout << "x = " << x << endl;
 
 		// Get the mean of dTz since it has been accumulated
 		dTz /= num_valid_pts;
@@ -194,10 +386,11 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 
 		// x = [cos(yaw) sin(yaw) dY]
 		x(0) = fabs(x(0)) > 1 ? x(0) / fabs(x(0)) : x(0);
-		double dyaw = -1.2 * atan2(x(1), x(0));
+		double dyaw = 1.0 * atan2(x(1), x(0));
 
 		// Update the position
-		pos(1) += x(2); // y-update 
+		pos(0) += x(2); // x-update 
+		pos(1) += x(3); // y-update 
 		pos(2) += dTz;	// z-update
 
 		// Convert the orientation to 'rpy', update yaw and 
@@ -205,21 +398,29 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 		Eigen::Matrix3d dcm = curr_pose.topLeftCorner<3, 3>();
 		rpy = utils::dcm2rpy(dcm);
 		rpy(2) += dyaw;
+		//cout << "dyaw = " << dyaw / 3.14 * 180<< endl;
+		//cout << "rpy = " << rpy << endl;
 		dcm = utils::rpy2dcm(rpy);
 
 		// Update the global pose matrix.
-		curr_pose.topLeftCorner(3, 3) = dcm;
+		curr_pose.topLeftCorner<3, 3>() = dcm;
+		//pos *= 1.5;
+		curr_pose(0, 3) = pos(0);
 		curr_pose(1, 3) = pos(1);
 		curr_pose(2, 3) = pos(2);
 	
 		// Transform points for next iteration.
 		pcl::transformPointCloud(*_cloud, *_cloud_aligned, curr_pose);
 
-		if(fabs(x(2)) < _xyz_tol && fabs(dTz) < _xyz_tol && fabs(dyaw) < _yaw_tol)
+		//break;
+		if(fabs(x(2)) < _xyz_tol && fabs(x(3)) < _xyz_tol && fabs(dTz) < _xyz_tol && fabs(dyaw) < _yaw_tol)
 			break;
 	}
 
 	_pose = curr_pose;
+
+	//cout << "estimated pose in the localizer : " << endl;
+	//cout << "_pose = "  << _pose << endl;
 
 	return iter;
 }

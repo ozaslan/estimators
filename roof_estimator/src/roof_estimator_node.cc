@@ -3,18 +3,21 @@
 #include <iostream>
 
 #include <ros/ros.h>
-#include <nav_msgs/Odometry.h>
+//#include <octomap_ros/conversions.h>
 #include <sensor_msgs/Imu.h>
+#include <nav_msgs/Odometry.h>
 #include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
-
-
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
 
 #include <utils.hh>
-#include <lidar_calib_params.hh>
-#include <camera_calib_params.hh>
+#include <calib_params.hh>
+
 #include "roof_localizer.hh"
+#include "roof_mapper.hh"
 
 /*
 	-- Process inputs
@@ -35,8 +38,9 @@ bool   debug_mode;
 ros::Publisher  odom_publ, 
 				laser_pc_publ,
 				res_rays_publ,
-				map_pc_publ,
-				flow_rays_publ;
+				map_publ,
+				flow_rays_publ,
+				last_range_registration_publ;
 ros::Subscriber imu_subs,
 				top_lidar_subs,	bot_lidar_subs,
 				top_cam_subs, bottom_cam_subs, 
@@ -54,18 +58,20 @@ CameraCalibParams left_cam_calib_params;
 LidarCalibParams  top_lidar_calib_params;
 LidarCalibParams  bottom_lidar_calib_params;
 
-string map_path;
-pcl::PointCloud<pcl::PointXYZ>::Ptr grid_map;
+//string map_path;
+//pcl::PointCloud<pcl::PointXYZ>::Ptr grid_map;
 
 // RoofLocalizer class wraps around the range based localizer and
 // image based localizer. Through pushing sensor data, corresponding
 // localizer is populated with sensor data. This continues until a
 // call to pose estimate routine which then flushes saved data.
 RoofLocalizer roof_localizer;
+RoofMapper    roof_mapper;
 
 sensor_msgs::LaserScan bot_lidar_msg, top_lidar_msg;
 sensor_msgs::Image	top_cam_msg, bot_cam_msg, 
 					right_cam_msg, left_cam_msg;
+
 sensor_msgs::Imu imu_msg;
 nav_msgs::Odometry odom_msg_in, odom_msg_out;
 visualization_msgs::Marker res_rays_msg, flow_rays_msg;
@@ -130,7 +136,7 @@ void process_inputs(const ros::NodeHandle &n)
 	n.param("bottom_cam_calib_file"		, bottom_cam_calib_file	 , string("ERROR"));
 	n.param("left_cam_calib_file"		, left_cam_calib_file	 , string("ERROR"));
 	
-	n.param("map_path", map_path, string(""));	
+	//n.param("map_path", map_path, string(""));	
 	
 	// ### I have to get laser and camera intrinsic/extrinsic 
 	// parameters from the parameter server too.
@@ -148,7 +154,7 @@ void process_inputs(const ros::NodeHandle &n)
 	ROS_INFO(" ---------- ROOF LOCALIZER ------------");
 	ROS_INFO("[refresh_rate] ---------- : [%.3f]", refresh_rate);
 	ROS_INFO("[debug_mode] ------------ : [%s]", debug_mode ? "TRUE" : "FALSE");
-	ROS_INFO("[map_path] -------------- : [%s]", map_path.c_str());
+	//ROS_INFO("[map_path] -------------- : [%s]", map_path.c_str());
 	ROS_INFO("[top_lidar_calib_file] ---: [%s]", top_lidar_calib_file.c_str());
 	ROS_INFO("[bottom_lidar_calib_file] : [%s]", bottom_lidar_calib_file.c_str());
 	ROS_INFO("[top_cam_calib_file] -----: [%s]", top_cam_calib_file.c_str());
@@ -166,8 +172,8 @@ void process_inputs(const ros::NodeHandle &n)
 	//top_lidar_calib_params.print();
 	
 	bottom_lidar_calib_params.load(bottom_lidar_calib_file);
-	//ROS_INFO("Bottom Lidar Calib Params :");
-	//bottom_lidar_calib_params.print();
+	ROS_INFO("Bottom Lidar Calib Params :");
+	bottom_lidar_calib_params.print();
 
 	top_cam_calib_params.load(top_cam_calib_file);
 	//ROS_INFO("Top Cam Calib Params :");
@@ -185,8 +191,8 @@ void process_inputs(const ros::NodeHandle &n)
 	//ROS_INFO("Left Cam Calib Params :");
 	//left_cam_calib_params.print();
 	
-	pcl::PointCloud<pcl::PointXYZ> temp_grid_map;
-	grid_map = temp_grid_map.makeShared();
+	//pcl::PointCloud<pcl::PointXYZ> temp_grid_map;
+	//grid_map = temp_grid_map.makeShared();
 	// Load the map from the given '.pcd' file path.
 	//if(pcl::io::loadPLYFile<pcl::PointXYZ> (map_path.c_str(), *grid_map) == -1){
 	//if(pcl::io::loadPCDFile<pcl::PointXYZ> (map_path.c_str(), *grid_map) == -1){
@@ -218,9 +224,10 @@ void setup_messaging_interface(ros::NodeHandle &n)
 	laser_pc_publ	= n.advertise<sensor_msgs::PointCloud2>("debug/pc/aligned_sensor_data", 10);
 	res_rays_publ   = n.advertise<visualization_msgs::Marker>("debug/residual_rays", 10);
 	flow_rays_publ  = n.advertise<visualization_msgs::Marker>("debug/flow_rays", 10);
+	last_range_registration_publ = n.advertise<sensor_msgs::PointCloud>("debug/pc/last_range_registration", 10);
 	// The current implementation loads the map from a '.pcd' file.
 	// In the following versions, we may swich to listening to octomap messages.
-	map_pc_publ		= n.advertise<pcl::PointCloud<pcl::PointXYZ> >("debug/pc/map", 10);
+	map_publ		= n.advertise<octomap_msgs::Octomap>("debug/pc/map", 10);
 }
 
 void loop(const ros::NodeHandle &n)
@@ -228,18 +235,19 @@ void loop(const ros::NodeHandle &n)
 	int map_publ_flag = 0;
 	ros::Rate r(refresh_rate);
 
+	estm_pose = Eigen::Matrix4d::Identity();
+
 	while (n.ok())
 	{
 		r.sleep();
 		ros::spinOnce();
 
 		geometry_msgs::Quaternion odom_quat = odom_msg_in.pose.pose.orientation;
-		geometry_msgs::Quaternion  imu_quat =  imu_msg.orientation;
+		geometry_msgs::Quaternion  imu_quat = imu_msg.orientation;
 		// Check if we got an odometry message. Then assign initial pose for the estimator
 		// as the odometry pose.
 		
 		init_pose = Eigen::Matrix4d::Identity();
-		init_pose(0, 3) = 2;
 		// Check if either odom_msg_in or imu_msg provide orientation information. If none
 		// are available, postpone pose estimation.
 		if(odom_quat.w != 0 || odom_quat.x != 0 || odom_quat.y != 0 || odom_quat.z != 0){
@@ -261,57 +269,134 @@ void loop(const ros::NodeHandle &n)
 			dcm = utils::quat2dcm(quat);
 			dcm = utils::cancel_yaw(dcm);
 			init_pose.topLeftCorner(3, 3) = dcm.transpose();
-			init_pose(0, 3) = 10;
+			init_pose(0, 3) = 0;
 			init_pose(1, 3) = 0;
-			init_pose(2, 3) = 1.5;
+			init_pose(2, 3) = 0;
 
 		} else
 			continue;
 		
 		// Push lidar data 
 		int num_lidar_data = 0;
-    if(top_lidar_msg.ranges.size() * top_lidar_msg.header.stamp.sec * top_lidar_msg.header.stamp.nsec != 0){
+		if(top_lidar_msg.ranges.size() * top_lidar_msg.header.stamp.sec * top_lidar_msg.header.stamp.nsec != 0){
 		    roof_localizer.push_lidar_data(top_lidar_msg, top_lidar_calib_params, true);
-		    top_lidar_msg.header.stamp.sec = 0;
+		    //top_lidar_msg.header.stamp.sec = 0;
 		    num_lidar_data++;
 		}
-    if(bot_lidar_msg.ranges.size() * bot_lidar_msg.header.stamp.sec * bot_lidar_msg.header.stamp.nsec != 0){
+	    if(bot_lidar_msg.ranges.size() * bot_lidar_msg.header.stamp.sec * bot_lidar_msg.header.stamp.nsec != 0){
     		roof_localizer.push_lidar_data(bot_lidar_msg, bottom_lidar_calib_params);
-		    bot_lidar_msg.header.stamp.sec = 0;
+		    //bot_lidar_msg.header.stamp.sec = 0;
 		    num_lidar_data++;
-    }
-    if(right_cam_msg.data.size() * right_cam_msg.header.stamp.sec * right_cam_msg.header.stamp.nsec != 0){
+		}
+		/*
+	    if(right_cam_msg.data.size() * right_cam_msg.header.stamp.sec * right_cam_msg.header.stamp.nsec != 0){
     		roof_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
     		right_cam_msg.header.stamp.sec = 0;
-    }
-    /*
-    if(top_cam_msg.data.size() * top_cam_msg.header.stamp.sec * top_cam_msg.header.stamp.nsec != 0){
-    		roof_localizer.push_camera_data(top_cam_msg  , top_cam_calib_params);
-    		top_cam_msg.header.stamp.sec = 0;
-    }
-    if(bot_cam_msg.data.size() * bot_cam_msg.header.stamp.sec * bot_cam_msg.header.stamp.nsec != 0){
-    		roof_localizer.push_camera_data(bot_cam_msg  , bottom_cam_calib_params);
-    		bot_cam_msg.header.sec = 0;
-    }
-    */
-    if(left_cam_msg.data.size() * left_cam_msg.header.stamp.sec * left_cam_msg.header.stamp.nsec != 0){
+		}
+		*/
+	    /*
+		if(top_cam_msg.data.size() * top_cam_msg.header.stamp.sec * top_cam_msg.header.stamp.nsec != 0){
+				roof_localizer.push_camera_data(top_cam_msg  , top_cam_calib_params);
+				top_cam_msg.header.stamp.sec = 0;
+	    }
+		if(bot_cam_msg.data.size() * bot_cam_msg.header.stamp.sec * bot_cam_msg.header.stamp.nsec != 0){
+				roof_localizer.push_camera_data(bot_cam_msg  , bottom_cam_calib_params);
+	    		bot_cam_msg.header.sec = 0;
+	    }
+	    */
+		/*
+		if(left_cam_msg.data.size() * left_cam_msg.header.stamp.sec * left_cam_msg.header.stamp.nsec != 0){
     		roof_localizer.push_camera_data(left_cam_msg , left_cam_calib_params);
     		left_cam_msg.header.stamp.sec = 0;
-    }
+	    }
+		*/
+	
+		// Estimate the pose
+		cout << "NUM LIDAR DATA = " << num_lidar_data << endl;
+		if(num_lidar_data == 2){
 
-    if(num_lidar_data == 2){
-			octomap::OcTree octomap(0.05);
-    		roof_localizer.estimate_pose(init_pose, octomap);
-    		roof_localizer.get_pose(estm_pose);
-    		Eigen::Matrix6d cov;
-    		roof_localizer.get_covariance(cov);
-    } else 
-      continue;
+		    top_lidar_msg.header.stamp.sec = 0;
+		    bot_lidar_msg.header.stamp.sec = 0;
+			static bool first_loop = true;
+			// In the worst case, estm_pose should be init_pose
+			
+			//cout << "estm_pose = " << estm_pose << endl;
+
+			if(first_loop == false){
+				roof_localizer.get_pose(estm_pose);
+
+				// 'init_pose' does not have the latest position estimate.
+				// Copy the last position estimate from 'estm_pose' as well
+				// as the yaw estimate into 'init_pose'.
+				init_pose.topRightCorner<3, 1>() = estm_pose.topRightCorner<3, 1>();
+				Eigen::Matrix3d dcm1 = init_pose.topLeftCorner<3, 3>();
+				Eigen::Vector3d rpy1 = utils::dcm2rpy(dcm1);
+				Eigen::Matrix3d dcm2 = estm_pose.topLeftCorner<3, 3>();
+				Eigen::Vector3d rpy2 = utils::dcm2rpy(dcm2);
+				rpy1(2) = rpy2(2);
+				dcm1 = utils::rpy2dcm(rpy1);
+				init_pose.topLeftCorner<3, 3>() = dcm1;
+
+				cout << "<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+				roof_localizer.estimate_pose(init_pose, roof_mapper.get_octomap());
+				cout << ">>>>>>>>>>>>>>>>>>>>>>>>" << endl;
+				roof_localizer.get_pose(estm_pose);
+		    	Eigen::Matrix6d cov;
+		    	roof_localizer.get_covariance(cov);
+			}
+			static int turn = 0;
+			if(turn % 1 == 0){
+				//cout << "HERE 1 :" << endl << estm_pose << endl;
+				roof_mapper.register_lidar_data(estm_pose, top_lidar_msg, top_lidar_calib_params);
+				const octomap::Pointcloud cloud1 = roof_mapper.get_last_range_registration();
+				static sensor_msgs::PointCloud temp_cloud;
+				
+				temp_cloud.header.stamp = ros::Time::now();
+				temp_cloud.header.seq++;
+				temp_cloud.header.frame_id = "world";
+				temp_cloud.points.resize(cloud1.size());
+				for(int i = 0 ; i < (int)cloud1.size() ; i++){
+					octomap::point3d pt = cloud1.getPoint(i);
+					temp_cloud.points[i].x = pt.x();
+					temp_cloud.points[i].y = pt.y();
+					temp_cloud.points[i].z = pt.z();
+				}
+
+				//cout << "HERE 2 :" << endl << estm_pose << endl;
+				roof_mapper.register_lidar_data(estm_pose, bot_lidar_msg, bottom_lidar_calib_params);
+				const octomap::Pointcloud cloud2 = roof_mapper.get_last_range_registration();
+				
+				int offset = temp_cloud.points.size();
+				temp_cloud.points.resize(offset + cloud2.size());
+				for(int i = 0 ; i < (int)cloud2.size() ; i++){
+					octomap::point3d pt = cloud2.getPoint(i);
+					temp_cloud.points[offset + i].x = pt.x();
+					temp_cloud.points[offset + i].y = pt.y();
+					temp_cloud.points[offset + i].z = pt.z();
+				}
+
+
+				last_range_registration_publ.publish(temp_cloud);
+			}
+			turn++;
+			//cout << "qBBXMin = " << roof_mapper.get_octomap().getBBXMin() << endl;
+			//cout << "qBBXMax = " << roof_mapper.get_octomap().getBBXMax() << endl;
+			//cout << "num nodes = " << roof_mapper.get_octomap().calcNumNodes() << endl;
+
+			static octomap_msgs::Octomap octomap_msg;
+			octomap_msg.header.frame_id = "world";
+			octomap_msg.header.stamp    = ros::Time::now();
+			octomap_msg.header.seq++;
+			octomap_msgs::binaryMapToMsg(roof_mapper.get_octomap(), octomap_msg);
+			map_publ.publish(octomap_msg);
+			first_loop = false;
+		} else
+			continue;
 		
 		odom_msg_out.header.seq++;
 		odom_msg_out.header.stamp = ros::Time::now();
-		odom_msg_out.header.frame_id = "map";
-		odom_msg_out.pose.pose.position.x = estm_pose(0, 3) + 2;
+		odom_msg_out.header.frame_id = "world";
+		odom_msg_out.pose.pose.position.x = estm_pose(0, 3);
 		odom_msg_out.pose.pose.position.y = estm_pose(1, 3);
 		odom_msg_out.pose.pose.position.z = estm_pose(2, 3);
 		dcm  = estm_pose.topLeftCorner(3, 3);
@@ -322,27 +407,25 @@ void loop(const ros::NodeHandle &n)
 		odom_msg_out.pose.pose.orientation.z = quat(3);
 		odom_publ.publish(odom_msg_out);
 
-    publish_res_rays(n);
+	    publish_res_rays(n);
 		publish_flow_rays(n);
 
 		//cout << "B3" << endl;
 		pcl::PointCloud<pcl::PointXYZ>::Ptr registered_lidar_cloud;
 		roof_localizer.get_registered_lidar_cloud(registered_lidar_cloud);
-		registered_lidar_cloud->header.frame_id = "map";
+		registered_lidar_cloud->header.frame_id = "world";
 		registered_lidar_cloud->header.stamp = ros::Time::now().toSec() * 1000;
-		for(int i = 0 ; i < (int)registered_lidar_cloud->points.size() ; i++)
-		  registered_lidar_cloud->points[i].x += odom_msg_out.pose.pose.position.x - 2;
 		laser_pc_publ.publish(*registered_lidar_cloud);
 
 		//cout << "B4" << endl;
 		if(--map_publ_flag <= 0){
-			grid_map->header.frame_id = "map";
-			grid_map->header.stamp = ros::Time::now().toSec() * 1000;
-			map_pc_publ.publish(*grid_map);
+			//grid_map->header.frame_id = "world";
+			//grid_map->header.stamp = ros::Time::now().toSec() * 1000;
+			//map_publ.publish(*grid_map);
 			map_publ_flag = 200;
 		}
 
-			}
+	}
 }
 
 void imu_callback(const sensor_msgs::Imu &msg){
@@ -408,13 +491,13 @@ void publish_res_rays(const ros::NodeHandle &n){
 	roof_localizer.get_range_map_correspondences(range, map);
 
 	res_rays_msg.header.seq++;
-	res_rays_msg.header.frame_id = "map";
+	res_rays_msg.header.frame_id = "world";
 	res_rays_msg.header.stamp = ros::Time::now();
 
 	res_rays_msg.id = 0;
 	res_rays_msg.type = visualization_msgs::Marker::LINE_LIST;
 	res_rays_msg.action = visualization_msgs::Marker::ADD;
-	res_rays_msg.pose.position.x = odom_msg_out.pose.pose.position.x - 2;
+	res_rays_msg.pose.position.x = 0;
 	res_rays_msg.pose.position.y = 0;
 	res_rays_msg.pose.position.z = 0;
 	res_rays_msg.pose.orientation.x = 0.0;
@@ -450,7 +533,7 @@ void publish_flow_rays(const ros::NodeHandle &n){
 	roof_localizer.get_back_projected_features(tails, tips);
 
 	flow_rays_msg.header.seq++;
-	flow_rays_msg.header.frame_id = "map";
+	flow_rays_msg.header.frame_id = "world";
 	flow_rays_msg.header.stamp = ros::Time::now();
 
 	flow_rays_msg.id = 33;

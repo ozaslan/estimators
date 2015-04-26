@@ -28,8 +28,8 @@
 class RoofLocalizer{
   private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr _map;
-    RangeBasedRoofLocalizer _rbtl;
-    VisionBasedRoofLocalizer _vbtl;
+    RangeBasedRoofLocalizer _rbrl;
+    VisionBasedRoofLocalizer _vbrl;
     vector<cv::Mat> _frames;
     vector<CameraCalibParams>		_cam_params;
     double _x_disp, _x_pos;

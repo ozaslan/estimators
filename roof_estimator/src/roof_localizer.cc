@@ -60,8 +60,9 @@ bool RoofLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const Li
 	utils::cluster_laser_scan(data, mask, num_clusters, params.min_range, params.max_range);
 	// ### (to be done) manually assign new clusters to upward and downward rays
 
+	
 	for(int i = 1 ; i <= num_clusters ; i++)
-		_rbtl.push_laser_data(params.relative_pose, data, mask, i, i == 1 && clean_start);
+		_rbrl.push_laser_data(params.relative_pose, data, mask, i, i == 1 && clean_start);
 
 	// ### update relative pose for upwards and downwards rays. 
 	// push_laser_data(...)
@@ -96,7 +97,7 @@ bool RoofLocalizer::push_camera_data(const sensor_msgs::Image &data, const Camer
 	// If the source is completely different from the provious sources,
 	// then push the data.
 
-	cout << "data.[width, height] = [" << data.width << ", " << data.height << "]" << endl;
+	//cout << "data.[width, height] = [" << data.width << ", " << data.height << "]" << endl;
 
 	bool is_new_camera = true;
 	cv_bridge::CvImagePtr image_msg;
@@ -133,22 +134,22 @@ bool RoofLocalizer::push_camera_data(const sensor_msgs::Image &data, const Camer
 		} else
 			_frames.push_back(image_msg->image);
 		_cam_params.push_back(params);
-		_vbtl.register_camera_params(_cam_params);
+		_vbrl.register_camera_params(_cam_params);
 	}
 
 	bool all_frames_present = true;
 	for(int i = 0 ; i < (int)_camera_data_available.size() ; i++)
 		all_frames_present = all_frames_present && _camera_data_available[i];
 
-	cout << "all_frames_present = " << all_frames_present << endl;
+	//cout << "all_frames_present = " << all_frames_present << endl;
 
 	if(all_frames_present == false)
 		return false;
 	else {
 		Eigen::Matrix4d pose;
-		_rbtl.get_pose(pose);
-		cout << "_frames.size() = " << _frames.size() << endl;
-		_vbtl.push_camera_data(_frames, pose);
+		_rbrl.get_pose(pose);
+		//cout << "_frames.size() = " << _frames.size() << endl;
+		_vbrl.push_camera_data(_frames, pose);
 		// Invalidate all the camera data.
 		std::fill(_camera_data_available.begin(), 
 				  _camera_data_available.end(), false);
@@ -160,19 +161,21 @@ bool RoofLocalizer::push_camera_data(const sensor_msgs::Image &data, const Camer
 bool RoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, const octomap::OcTree &octomap){
 	// ### I have to have options for particle filter,
 	// freedoms to update, initiali pose etc...
-	_rbtl.estimate_pose(init_pose, octomap);
+	//cout << "init_pose in RoofLocalizer::estimate_pose(...) : " << endl;
+	//cout << "init_pose = " << init_pose << endl;
+	_rbrl.estimate_pose(init_pose, octomap);
 
 	// ### didn't like this
-	_vbtl.estimate_displacement(_x_disp);
-	_x_pos += _x_disp;
-	cout << "_x_disp = " << _x_disp << endl;
+	//_vbrl.estimate_displacement(_x_disp);
+	//_x_pos += _x_disp;
+	//cout << "_x_disp = " << _x_disp << endl;
 
 	return true;
 }
 
 bool RoofLocalizer::reset(){
-	//_rbtl.reset();
-	//_vbtl.reset();
+	//_rbrl.reset();
+	//_vbrl.reset();
 	return true;
 }
 
@@ -180,33 +183,33 @@ bool RoofLocalizer::get_pose(Eigen::Matrix4d &pose){
 	Eigen::Matrix3d dcm;
 	Eigen::Vector3d pos;
 	pose = Eigen::Matrix4d::Identity();
-	_rbtl.get_pose(pose);
+	_rbrl.get_pose(pose);
 	//pose.topLeftCorner(3, 3)  = dcm;
 	//pose.topRightCorner(3, 1) = pos;
 	//pose(3, 3) = 1;
 	// ### from VisionBasedRoofLocalizer?
-	pose(0, 3) = _x_pos;
+	//pose(0, 3) = _x_pos;
 	return true;
 }
 
 bool RoofLocalizer::get_covariance(Eigen::Matrix6d &cov){
-	_rbtl.get_covariance(cov);
+	_rbrl.get_covariance(cov);
 	// ### from VisionBasedRoofLocalizer too?
 	return true;
 }
 
 
 bool RoofLocalizer::get_registered_lidar_cloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud ){
-	_rbtl.get_registered_pointcloud(cloud);
+	_rbrl.get_registered_pointcloud(cloud);
 	return true;
 }
 
 bool RoofLocalizer::get_range_map_correspondences(vector<pcl::PointXYZ> &range_pts, vector<pcl::PointXYZ> &map_pts){
-	return _rbtl.get_correspondences(range_pts, map_pts);
+	return _rbrl.get_correspondences(range_pts, map_pts);
 }
 
 bool RoofLocalizer::get_back_projected_features(vector<pcl::PointXYZ> &tails, vector<pcl::PointXYZ> &tips){
-	_vbtl.get_back_projected_flow_vectors(tails, tips);
+	_vbrl.get_back_projected_flow_vectors(tails, tips);
 	return true;
 }
 
@@ -215,7 +218,7 @@ bool RoofLocalizer::plot_tracked_features(cv::Mat &image, bool plot_flow, bool p
 		cout << "returning false"  << endl << endl;
 		return false;
 	}
-	_vbtl.plot_flows(_frames, true, plot_flow, plot_feats);
+	_vbrl.plot_flows(_frames, true, plot_flow, plot_feats);
 	image = _frames[0];
 	return true;
 }

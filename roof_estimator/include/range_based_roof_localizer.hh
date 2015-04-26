@@ -65,7 +65,7 @@ private:
 	// point cloud. This is called when 'push_X_data(...)' is called with 'reset' flag.
 	bool _reset();
 public:
-	RangeBasedRoofLocalizer(int max_iter = 23, double xyz_tol = 0.01, double yaw_tol = 0.035);
+	RangeBasedRoofLocalizer(int max_iter = 23, double xyz_tol = 0.01, double yaw_tol = 0.01);
 	// This adds laser points to the collective sensor pointcloud.
 	// 'rel_pose' is the pose of the laser scanner in the body frame
 	// 'mask' is a char vector where '0' denotes that the corresponding 
