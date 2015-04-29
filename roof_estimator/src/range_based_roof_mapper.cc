@@ -28,7 +28,7 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 	double th = data.angle_min;
 	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
 		if(mask.size() == 0 || mask[i] == cluster_id ){
-			utils::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
+			utils::laser::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
 			pt(2) = 0;
 			pt(3) = 1;
 			pt = pose * pt;

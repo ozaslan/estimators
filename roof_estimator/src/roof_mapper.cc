@@ -62,7 +62,7 @@ bool RoofMapper::register_lidar_data (const Eigen::Matrix4d &pose, const sensor_
 	}	
 
 	int num_clusters;
-	utils::cluster_laser_scan(scan, mask, num_clusters, params.min_range, params.max_range, 3, 0.3, 3);
+	utils::laser::cluster_laser_scan(scan, mask, num_clusters, params.min_range, params.max_range, 3, 0.3, 3);
 	// cluster_laser_scan(...) eliminates small clusters with the expense of 
 	// increasing the number of clusters. In order to integrate all range data
 	// at once, we mark all non-zero mask elements to '1'.

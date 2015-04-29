@@ -251,7 +251,8 @@ void loop(const ros::NodeHandle &n)
 		// Check if either odom_msg_in or imu_msg provide orientation information. If none
 		// are available, postpone pose estimation.
 		if(odom_quat.w != 0 || odom_quat.x != 0 || odom_quat.y != 0 || odom_quat.z != 0){
-			quat(0) = odom_quat.w;
+			/*
+      quat(0) = odom_quat.w;
 			quat(1) = odom_quat.x;
 			quat(2) = odom_quat.y;
 			quat(3) = odom_quat.z;
@@ -261,18 +262,21 @@ void loop(const ros::NodeHandle &n)
 			init_pose(0, 3) = odom_msg_in.pose.pose.position.x;
 			init_pose(1, 3) = odom_msg_in.pose.pose.position.y;
 			init_pose(2, 3) = odom_msg_in.pose.pose.position.z;
+      */
+      init_pose = utils::trans::odom2se3(odom_msg_in, true);
 		} else if(imu_quat.w != 0 || imu_quat.x != 0 || imu_quat.y != 0 || imu_quat.z != 0){
+      /*
 			quat(0) = imu_quat.w;
 			quat(1) = imu_quat.x;
 			quat(2) = imu_quat.y;
 			quat(3) = imu_quat.z;
 			dcm = utils::quat2dcm(quat);
 			dcm = utils::cancel_yaw(dcm);
-			init_pose.topLeftCorner(3, 3) = dcm.transpose();
+      */
+			init_pose.topLeftCorner(3, 3) = utils::trans::imu2dcm(imu_msg).transpose();
 			init_pose(0, 3) = 0;
 			init_pose(1, 3) = 0;
 			init_pose(2, 3) = 0;
-
 		} else
 			continue;
 		
@@ -330,11 +334,11 @@ void loop(const ros::NodeHandle &n)
 				// as the yaw estimate into 'init_pose'.
 				init_pose.topRightCorner<3, 1>() = estm_pose.topRightCorner<3, 1>();
 				Eigen::Matrix3d dcm1 = init_pose.topLeftCorner<3, 3>();
-				Eigen::Vector3d rpy1 = utils::dcm2rpy(dcm1);
+				Eigen::Vector3d rpy1 = utils::trans::dcm2rpy(dcm1);
 				Eigen::Matrix3d dcm2 = estm_pose.topLeftCorner<3, 3>();
-				Eigen::Vector3d rpy2 = utils::dcm2rpy(dcm2);
+				Eigen::Vector3d rpy2 = utils::trans::dcm2rpy(dcm2);
 				rpy1(2) = rpy2(2);
-				dcm1 = utils::rpy2dcm(rpy1);
+				dcm1 = utils::trans::rpy2dcm(rpy1);
 				init_pose.topLeftCorner<3, 3>() = dcm1;
 
 				cout << "<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
@@ -400,7 +404,7 @@ void loop(const ros::NodeHandle &n)
 		odom_msg_out.pose.pose.position.y = estm_pose(1, 3);
 		odom_msg_out.pose.pose.position.z = estm_pose(2, 3);
 		dcm  = estm_pose.topLeftCorner(3, 3);
-		quat = utils::dcm2quat(dcm);
+		quat = utils::trans::dcm2quat(dcm);
 		odom_msg_out.pose.pose.orientation.w = quat(0);
 		odom_msg_out.pose.pose.orientation.x = quat(1);
 		odom_msg_out.pose.pose.orientation.y = quat(2);

@@ -57,7 +57,29 @@ bool RoofLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const Li
 	}
 
 	// Use utils to cluster scan	
-	utils::cluster_laser_scan(data, mask, num_clusters, params.min_range, params.max_range);
+	utils::laser::cluster_laser_scan(data, mask, num_clusters, params.min_range, params.max_range);
+	vector<pair<int, int> > line_idxs;
+	utils::laser::fit_lines(data, mask, line_idxs, 0.33, 10, 0.08);
+
+	for(int i = 0 ; i <= (int)line_idxs.size() ; i++){
+		//cout << ">>>>>>>>>>> " << line_idxs[i].first << " " << line_idxs[i].second << endl;
+
+		int start_idx, end_idx;
+
+		if(i == 0)
+			start_idx = 0;
+		else
+			start_idx = line_idxs[i - 1].second + 1;
+
+		if(i == (int)line_idxs.size())
+			end_idx = mask.size();
+		else
+			end_idx = line_idxs[i].first;
+
+		for(int j = start_idx ; j < end_idx ; j++)
+			mask[j] = 0;
+	}
+
 	// ### (to be done) manually assign new clusters to upward and downward rays
 
 	

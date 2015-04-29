@@ -38,7 +38,7 @@ bool RangeBasedRoofLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose, c
 	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
 		if(mask.size() != 0 && mask[i] != cluster_id)
 			continue;
-		utils::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
+		utils::laser::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
 		pt(2) = pt(3) = 0;
 		pt = rel_pose * pt;
 		_cloud->points.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
@@ -53,7 +53,7 @@ bool RangeBasedRoofLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose, c
 	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
 	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
 	
-	utils::get_fim(data, mask, fim_xyp, cluster_id);
+	utils::laser::get_fim(data, mask, fim_xyp, cluster_id);
 
 	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
 	
@@ -194,6 +194,52 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				}
 
 				end = contour[min_dist_idx];
+
+				/* 
+					1 - Get the previous and next points.
+					2 - Compare attack angle to the corresponding lines.
+					3 - Pick the line with the largest dot product value.
+					4 - If the dot product is less than 0, the closest point
+						is the end-point
+					5 - If 4 does not hold dot product the distance to the
+						end-point with the normal vector. This becomes the
+						point-to-line distance.
+				*/	
+				
+				octomap::point3d prev_pt, next_pt;
+				if(min_dist_idx - 1 < 0){
+					next_pt = contour[min_dist_idx + 1];
+					prev_pt = next_pt;
+				} else if(min_dist_idx + 1 >= (int)contour.size()){
+					prev_pt = contour[min_dist_idx - 1];
+					next_pt = prev_pt;
+				} else {
+					prev_pt = contour[min_dist_idx - 1];
+					next_pt = contour[min_dist_idx + 1];
+				}
+
+				double dot1, dot2;
+				octomap::point3d ray0, ray1, ray2;
+				ray0 = end - ray_tip;
+				ray1 = next_pt - end;
+				ray2 = prev_pt - end;
+				dot1 = ray0.dot(ray1) / ray0.norm() / ray1.norm();
+				dot2 = ray0.dot(ray2) / ray0.norm() / ray2.norm();
+
+
+				if(dot1 < 0 && dot2 < 0){
+					// Closest point on the line the 
+					// 'end' end-point.	
+				} else {
+					if(dot1 > dot2){
+						end = end + ray0; - ray1 * (ray0.norm() * dot1);
+					} else {
+						//end = end + ray0 - (ray0.norm() * dot2) * ray2;
+					}
+				}
+
+				/* */
+
 
 				//cout << "% match #" << i << endl;
 				//cout << ray_tip << endl;
@@ -396,11 +442,11 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 		// Convert the orientation to 'rpy', update yaw and 
 		// convert back to dcm.
 		Eigen::Matrix3d dcm = curr_pose.topLeftCorner<3, 3>();
-		rpy = utils::dcm2rpy(dcm);
+		rpy = utils::trans::dcm2rpy(dcm);
 		rpy(2) += dyaw;
 		//cout << "dyaw = " << dyaw / 3.14 * 180<< endl;
 		//cout << "rpy = " << rpy << endl;
-		dcm = utils::rpy2dcm(rpy);
+		dcm = utils::trans::rpy2dcm(rpy);
 
 		// Update the global pose matrix.
 		curr_pose.topLeftCorner<3, 3>() = dcm;
