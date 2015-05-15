@@ -23,7 +23,6 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 	octomath::Pose6D cloud_trans(0, 0, 0, 0, 0, 0);
 	_cloud.transformAbsolute(cloud_trans);
 
-
 	Vector4d pt;
 	double th = data.angle_min;
 	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){

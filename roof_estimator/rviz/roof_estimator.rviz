@@ -1,0 +1,264 @@
+Panels:
+  - Class: rviz/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /AlignedSensorData1
+        - /Cameras/Raw1
+        - /OccupancyGrid1
+        - /LastRegisteredData1
+        - /LastRegisteredData1/Autocompute Value Bounds1
+      Splitter Ratio: 0.509333
+    Tree Height: 775
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+      - /Interact1
+    Name: Tool Properties
+    Splitter Ratio: 0.588679
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz/Time
+    Experimental: false
+    Name: Time
+    SyncMode: 0
+    SyncSource: LastRegisteredData
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 0.1
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: false
+      Line Style:
+        Line Width: 0.03
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 150
+      Reference Frame: <Fixed Frame>
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 0.468017
+        Min Value: -1.92023
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: AlignedSensorData
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.02
+      Style: Flat Squares
+      Topic: /roof_estimator/debug/pc/aligned_sensor_data
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /roof_estimator/debug/residual_rays
+      Name: RayCasts
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
+    - Angle Tolerance: 0.001
+      Class: rviz/Odometry
+      Color: 255; 25; 0
+      Enabled: false
+      Keep: 1
+      Length: 1
+      Name: MeasOdom
+      Position Tolerance: 0.001
+      Topic: /tunnel_localizer/odom
+      Value: false
+    - Class: rviz/Marker
+      Enabled: false
+      Marker Topic: /tunnel_localizer/debug/flow_rays
+      Name: FlowTriangles
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: false
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /cam1/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: TopCam
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: false
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /cam3/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: BottomCam
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: false
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /cam2/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: RightCam
+          Normalize Range: true
+          Queue Size: 1
+          Transport Hint: compressed
+          Value: false
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /cam0/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: LeftCam
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: false
+      Enabled: true
+      Name: Cameras/Raw
+    - Class: octomap_rviz_plugin/OccupancyGrid
+      Enabled: true
+      Max. Octree Depth: 16
+      Name: OccupancyGrid
+      Octomap Topic: /roof_estimator/debug/pc/map
+      Queue Size: 1
+      Value: true
+      Voxel Coloring: Z-Axis
+      Voxel Rendering: Occupied Voxels
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 9.60187
+        Min Value: -9.4262
+        Value: true
+      Axis: Y
+      Channel Name: intensity
+      Class: rviz/PointCloud
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: LastRegisteredData
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Flat Squares
+      Topic: /roof_estimator/debug/pc/last_range_registration
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Topic: /initialpose
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 4.16805
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 1.85647
+        Y: 0.519282
+        Z: -1.70508
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.102391
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+      Yaw: 3.35751
+    Saved: ~
+Window Geometry:
+  BottomCam:
+    collapsed: false
+  Displays:
+    collapsed: false
+  Height: 1056
+  Hide Left Dock: false
+  Hide Right Dock: false
+  LeftCam:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000017900000396fc020000000afb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006400fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000002800000396000000dd00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000e004c00650066007400430061006d02000004f00000022400000129000000f9fb0000000c0054006f007000430061006d02000004aa0000002b00000123000000f3000000010000010f00000396fc0200000005fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb000000120042006f00740074006f006d00430061006d0200000c660000010300000123000000f9fb0000000a00560069006500770073010000002800000396000000b000fffffffb000000100052006900670068007400430061006d02000004f10000012800000128000000fcfb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007510000003efc0100000002fb0000000800540069006d0065010000000000000751000002f600fffffffb0000000800540069006d00650100000000000004500000000000000000000004bd0000039600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  RightCam:
+    collapsed: false
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  TopCam:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1873
+  X: 1647
+  Y: 24
