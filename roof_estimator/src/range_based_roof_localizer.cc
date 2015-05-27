@@ -22,6 +22,49 @@ bool RangeBasedRoofLocalizer::_reset(){
 	return true;
 }
 
+bool RangeBasedRoofLocalizer::push_laser_data(const LaserProc &laser_proc, bool clean_start){
+	if(clean_start == true)
+		_reset();
+	
+	const vector<int> mask = laser_proc.get_mask();
+	const vector<Eigen::Vector3d> rays_3d = laser_proc.get_3d_points();
+	const vector<double> linearity_rates = laser_proc.get_linearity_rates();
+
+	// Reserve required space to prevent repetitive memory allocation
+	_cloud->points.reserve(_cloud->points.size() + mask.size());
+
+	for(int i = 0 ; i < (int)mask.size() ; i++){
+		if(mask[i] == false || linearity_rates[i] > 0.4)
+			continue;
+		_cloud->points.push_back(pcl::PointXYZ(rays_3d[i](0), rays_3d[i](1), rays_3d[i](2)));
+	}
+
+	// Accumulate information due to the laser scanner onto the _fim matrix.
+	// Each additional information is in the body frame. In the 'get_covariance(...)'
+	// function (if points have to been registered) this is projected onto the world 
+	// frame.
+	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
+	Eigen::Matrix3d dcm		= laser_proc.get_calib_params().relative_pose.topLeftCorner<3, 3>();	// Rotation matrix
+	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
+	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
+	
+	fim_xyp = laser_proc.get_fim();
+
+	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
+	
+	fim_xyz = dcm.transpose() * fim_xyz * dcm;
+	
+	fi_p = fim_xyp(2, 2) * dcm(2, 2);
+
+	_fim.block<3, 3>(0, 0) += fim_xyz;
+	_fim(3, 3) += fi_p;
+
+	_num_laser_pushes++;
+
+	return true;
+}
+
+
 bool RangeBasedRoofLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id, bool clean_start){
 	// ### This still does not incorporate the color information
 	ASSERT(mask.size() == 0 || data.ranges.size() == mask.size(), "mask and data size should be the same.");
@@ -161,7 +204,7 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 			// Fetch only the first intersection point
 			//cout << "origin = " << origin << endl;
 			//cout << "ray    = " << ray << endl;
-			bool suc = octomap.castRay(origin, ray, end, true, 19.0);
+			bool suc = octomap.castRay(origin, ray * 0.001, end, true, 19.0);
 			ray_cast_suc[i] = suc;
 			if(suc == true)
 				contour[i] = end;
@@ -169,6 +212,7 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				contour[i].x() = 9999999;
 		}
 
+		cout << "pts = [ " << endl;
 		for(int i = 0 ; i < num_pts ; i++){		
 			// If there was no intersection, nullify the effect by zero'ing the corresponding equation
 			if(ray_cast_suc[i] == false){
@@ -233,9 +277,9 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 					// 'end' end-point.	
 				} else {
 					if(dot1 > dot2){
-						end = end + ray0; - ray1 * (1 / ray1.norm()) * (ray0.norm() * dot1);
+						//end = end + ray0; - ray1 * (1 / ray1.norm()) * (ray0.norm() * dot1);
 					} else {
-						end = end + ray0; - ray2 * (1 / ray2.norm()) * (ray0.norm() * dot2);
+						//end = end + ray0; - ray2 * (1 / ray2.norm()) * (ray0.norm() * dot2);
 					}
 				}
 
@@ -245,6 +289,11 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				//cout << "% match #" << i << endl;
 				//cout << ray_tip << endl;
 				//cout << end << endl;		
+
+				cout << _cloud_aligned->points[i].x << ", " << 
+						_cloud_aligned->points[i].y << ", " <<
+						_cloud_aligned->points[i].z << endl;
+				cout << end.x() << ", " << end.y() << ", " << end.z() << endl;
 
 				// Get the ray in the body frame ()
 				ray.x() = _cloud_aligned->points[i].x - pos(0);
@@ -291,7 +340,6 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 				b(2 * i) *= weight * dir_weight;
 				b(2 * i + 1) *= weight * dir_weight;
 				A.block<2, 4>(2 * i, 0) *= weight * dir_weight;
-				
 				//double weight_x = exp(-fabs(res_vec(0) / res_vec.norm()));
 				//double weight_y = exp(-fabs(res_vec(1) / res_vec.norm()));
 				//b(2 * i) *= weight_x;
@@ -307,11 +355,15 @@ int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, con
 			}	
 		}
 
+		cout << "];" << endl;
+
 		if(converged == true)
 			break;
 
 		// Solve for the least squares solution.
 		x = (A.transpose() * A).inverse() * A.transpose() * b;
+
+		cout << "res : " << A * x - b << endl;
 
 		//cout << "x = " << x << endl;
 

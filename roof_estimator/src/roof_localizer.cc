@@ -2,6 +2,49 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
+bool RoofLocalizer::push_lidar_data (const LaserProc &laser_proc, bool clean_start){
+	const LidarCalibParams& params = laser_proc.get_calib_params();
+	ros::Time stamp = laser_proc.get_timestamp();
+	for(int i = 0 ; i < (int)_lidar_ids.size() ; i++ ){
+		if(_lidar_ids[i] == params.unique_id){
+			_lidar_data_available[i] = true;
+			if(_lidar_stamps[i].first  == stamp.sec &&
+					_lidar_stamps[i].second == stamp.nsec)
+				return false;
+			else {
+				clean_start = true;
+				break;
+
+			}
+		}
+	}
+
+	if(clean_start == true){
+		_lidar_ids.clear();
+		_lidar_stamps.clear();
+		_lidar_data_available.clear();
+	}
+
+	_lidar_ids.push_back(params.unique_id);
+	_lidar_stamps.push_back(std::make_pair<double, double>(
+				stamp.sec, stamp.nsec));
+	_lidar_data_available.push_back(true);
+
+	//const vector<int>& mask = laser_proc.get_mask();
+	//int num_clusters = laser_proc.get_num_clusters();
+
+	//for(int i = 1 ; i <= num_clusters ; i++)
+	//	_rbrl.push_laser_data(params.relative_pose, data, mask, i, i == 1 && clean_start);
+
+	_rbrl.push_laser_data(laser_proc, clean_start);
+
+	// ### update relative pose for upwards and downwards rays. 
+	// push_laser_data(...)
+
+	return true;
+
+}
+
 bool RoofLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const LidarCalibParams  &params, bool clean_start){
 	// 'push_lidar_data(...)' is responsible for checking a clean
 	// start is required or not. It searches for all of the previously 
@@ -14,7 +57,7 @@ bool RoofLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const Li
 		if(_lidar_ids[i] == params.unique_id){
 			_lidar_data_available[i] = true;
 			if(_lidar_stamps[i].first  == data.header.stamp.sec &&
-			   _lidar_stamps[i].second == data.header.stamp.nsec)
+					_lidar_stamps[i].second == data.header.stamp.nsec)
 				return false;
 			else {
 				clean_start = true;
@@ -82,7 +125,7 @@ bool RoofLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const Li
 
 	// ### (to be done) manually assign new clusters to upward and downward rays
 
-	
+
 	for(int i = 1 ; i <= num_clusters ; i++)
 		_rbrl.push_laser_data(params.relative_pose, data, mask, i, i == 1 && clean_start);
 
@@ -174,7 +217,7 @@ bool RoofLocalizer::push_camera_data(const sensor_msgs::Image &data, const Camer
 		_vbrl.push_camera_data(_frames, pose);
 		// Invalidate all the camera data.
 		std::fill(_camera_data_available.begin(), 
-				  _camera_data_available.end(), false);
+				_camera_data_available.end(), false);
 
 		return true;
 	}

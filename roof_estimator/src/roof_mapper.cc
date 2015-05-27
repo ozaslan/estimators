@@ -27,6 +27,50 @@ RoofMapper::RoofMapper(){
 	//_camera_ids;
 }
 
+bool RoofMapper::register_lidar_data (const Eigen::Matrix4d &pose, const LaserProc &laser_proc, bool clean_start){
+	static Eigen::Matrix4d sensor_pose;
+	static vector<char> mask;
+	
+	// ### clean_start = true is not implemented.
+
+	LidarCalibParams params = laser_proc.get_calib_params();
+	
+	bool new_device = true;
+	for(int i = 0 ; i < (int)_lidar_ids.size() ; i++){
+		if(_lidar_ids[i] == params.unique_id){
+			new_device = false;
+			break;
+		}
+	}
+
+	if(new_device == true)
+		_lidar_ids.push_back(params.unique_id);
+	
+	int num_clusters = laser_proc.get_num_clusters();
+	const vector<int> nask = laser_proc.get_mask();
+
+	//utils::laser::cluster_laser_scan(scan, mask, num_clusters, params.min_range, params.max_range, 3, 0.3, 3);
+	// cluster_laser_scan(...) eliminates small clusters with the expense of 
+	// increasing the number of clusters. In order to integrate all range data
+	// at once, we mark all non-zero mask elements to '1'.
+	/*
+	for(int i = 0 ; i < (int)mask.size() ; i++)
+		if(mask[i] != 0)
+			mask[i] = 1;
+	*/
+
+	// sensor_pose = pose * params.relative_pose;
+	//sensor_pose = pose;
+	//sensor_pose = params.relative_pose * pose;
+	//cout << "fed pose to the 'roof_mapper : " << endl << pose << endl;
+	//cout << "sensor relative pose = " << endl << params.relative_pose << endl;
+	//cout << "sensor_pose in 'roof_mapper' = " << endl << sensor_pose << endl;
+	//_rbrm.register_scan(sensor_pose, scan, mask, 1, new_device ? 1.50 : 0);
+	_rbrm.register_scan(pose, laser_proc, new_device ? 1.50 : 0);
+	return true;
+
+}
+
 bool RoofMapper::register_lidar_data (const Eigen::Matrix4d &pose, const sensor_msgs::LaserScan &scan  , const LidarCalibParams  &params, bool clean_start){
 	static Eigen::Matrix4d sensor_pose;
 	static vector<char> mask;

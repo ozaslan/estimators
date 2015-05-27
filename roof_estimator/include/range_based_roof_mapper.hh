@@ -19,6 +19,8 @@
 #include <octomap/OcTree.h>
 
 #include <utils.hh>
+#include <laser_proc.hh>
+#include <calib_params.hh>
 
 /*
 
@@ -58,6 +60,7 @@ public:
   // If 'mask.size() = 0' all the scan data is used. If 'mask.size() = scan.ranges.size()'
   // then all the data with 'mask[i] = false' is discarded. Different 'mask'
   // and 'ranges' sizes causes an exception.
+  bool register_scan (const Eigen::Matrix4d &pose, const LaserProc &laser_proc, double extrude = 0);
   bool register_scan (const Eigen::Matrix4d &pose, const sensor_msgs::LaserScan &scan, const vector<char> &mask, char cluster_id, double extrude = 0);
   // This function integrates the point cloud into the octree where 'pose'
   // is the pose of the sensor. If 'mask.size() = 0' all the data is used. 

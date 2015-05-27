@@ -22,6 +22,7 @@
 #include <pcl/registration/icp.h>
 
 #include <calib_params.hh>
+#include <laser_proc.hh>
 #include "range_based_roof_localizer.hh"
 #include "vision_based_roof_localizer.hh"
 
@@ -40,6 +41,7 @@ class RoofLocalizer{
     vector<string> _lidar_ids, _camera_ids;
 
   public:
+    bool push_lidar_data (const LaserProc &laser_proc, bool clean_start = false);
     // The following functions process raw data and register to the proper localizer lower-level estimators.
     // After registration estimate(...) function has to be called explicitely. Before registering new
     // sensor data, reset(...) has to be called in order to forget previous sensor information.

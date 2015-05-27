@@ -69,6 +69,7 @@ class RoofMapper{
     // The following functions process raw data and register to the proper lower-level mappers.
 	// 'clean_start = true' forces the corresponding map to be reset first. For the case of
 	// lidar registration, this will force extrusion of first instance of each lidar data.
+    bool register_lidar_data (const Eigen::Matrix4d &pose, const LaserProc &laser_proc, bool clean_start = false);
     bool register_lidar_data (const Eigen::Matrix4d &pose, const sensor_msgs::LaserScan &scan  , const LidarCalibParams  &params, bool clean_start = false);
     bool register_rgbd_data  (const Eigen::Matrix4d &pose, const sensor_msgs::PointCloud2 &rdgb, const RGBDCalibParams   &params, bool clean_start = false);
     bool register_camera_data(const Eigen::Matrix4d &pose, const sensor_msgs::Image &frame	   , const CameraCalibParams &params, bool clean_start = false);

@@ -15,8 +15,9 @@
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
 
-#include<octomap/OcTree.h>
+#include <octomap/OcTree.h>
 
+#include <laser_proc.hh>
 #include <utils.hh>
 
 /*	This class provides pose estimate of the robot in a known environment.
@@ -73,6 +74,7 @@ public:
 	// and 'mask' do not match. Otherwise only ranges where 'mask[i] == 
 	// cluster_id' are processed. If 'clean_start' is set, '_reset()'
 	// is called before every other operation.
+	bool push_laser_data(const LaserProc &laser_proc, bool clean_start);
 	bool push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id, bool clean_start = false);
 	// This adds pointcloud, possibly from an rgbd sensor, to the 
 	// collvective sensor pointcloud. 'rel_pose' is the pose of 
