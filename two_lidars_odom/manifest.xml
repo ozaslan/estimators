@@ -1,0 +1,25 @@
+<package>
+<description brief="two_lidars_odom">
+
+two_lidars_odom
+
+  </description>
+  <author>ozaslan</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/two_lidars_odom</url>
+  <depend package="roscpp"/>
+  <depend package="utils"/>
+  <depend package="laser_proc"/>
+  <depend package="sensor_msgs"/>
+  <depend package="nav_msgs"/>
+  <depend package="visualization_msgs"/>
+  <depend package="calib_params"/>
+  <depend package="cv_bridge"/>
+  <depend package="laser_proc"/>
+  <rosdep name="eigen" />
+  <depend package="octomap" />
+  <depend package="octomap_msgs" />
+</package>
+
+

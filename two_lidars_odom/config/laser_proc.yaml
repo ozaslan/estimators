@@ -1,0 +1,26 @@
+refresh_rate: 40.0
+debug_mode: FALSE
+
+calib_file: ""
+median_filter: TRUE
+median_filter_window: 3
+downsample: TRUE
+downsample_thres: 0.05
+remove_occlusion: TRUE
+remove_occlusion_thres: 0.50
+remove_occlusion_window: 3
+remove_slant_edges: TRUE
+remove_slant_edges_thres: 1.4835
+remove_slant_edges_window: 3
+cluster: TRUE
+cluster_min_skips: 30
+cluster_range_jump: 0.50
+cluster_min_cluster_size: 3
+rate_linearity: TRUE
+rate_linearity_window: 13
+extract_lines: FALSE
+extract_lines_min_len: 0.10
+extract_lines_min_pts: 3
+extract_lines_epsilon: 0.08
+project: FALSE
+
