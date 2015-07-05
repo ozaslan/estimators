@@ -1,478 +1,384 @@
 /*
-	See the header file for detailed explanations
-	of the below functions.
-*/
+   See the header file for detailed explanations
+   of the below functions.
+ */
 
 #include "range_based_roof_localizer.hh"
 
-RangeBasedRoofLocalizer::RangeBasedRoofLocalizer(int max_iter, double xyz_tol, double yaw_tol){
-	_cloud	       = pcl::PointCloud<pcl::PointXYZ>().makeShared();
-	_cloud_aligned = pcl::PointCloud<pcl::PointXYZ>().makeShared();
-	_max_iters = max_iter;
-	_xyz_tol = xyz_tol;
-	_yaw_tol = yaw_tol;
+RangeBasedRoofLocalizer::RangeBasedRoofLocalizer(int max_iter, double xyz_tol, double rot_tol){
+  _cloud	       = pcl::PointCloud<pcl::PointXYZ>().makeShared();
+  _cloud_aligned = pcl::PointCloud<pcl::PointXYZ>().makeShared();
+  _max_iter = max_iter;
+  _xyz_tol = xyz_tol;
+  _rot_tol = rot_tol;
 }
 
 bool RangeBasedRoofLocalizer::_reset(){
-	_cloud->points.clear();
-	_cloud_aligned->points.clear();
-	_num_laser_pushes = 0;
-	_num_rgbd_pushes  = 0;
-	_fim = Eigen::Matrix6d::Zero();
-	return true;
+  _cloud->points.clear();
+  _cloud_aligned->points.clear();
+  _num_rgbd_pushes  = 0;
+  _fim = Eigen::Matrix6d::Zero();
+
+  _laser_procs.clear();
+
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::push_laser_data(const LaserProc &laser_proc, bool clean_start){
-	if(clean_start == true)
-		_reset();
-	
-	const vector<int> mask = laser_proc.get_mask();
-	const vector<Eigen::Vector3d> rays_3d = laser_proc.get_3d_points();
-	const vector<double> linearity_rates = laser_proc.get_linearity_rates();
+  if(clean_start == true)
+    _reset();
 
-	// Reserve required space to prevent repetitive memory allocation
-	_cloud->points.reserve(_cloud->points.size() + mask.size());
+  _laser_procs.push_back(&laser_proc);
 
-	for(int i = 0 ; i < (int)mask.size() ; i++){
-		if(mask[i] == false || linearity_rates[i] > 0.4)
-			continue;
-		_cloud->points.push_back(pcl::PointXYZ(rays_3d[i](0), rays_3d[i](1), rays_3d[i](2)));
-	}
+  // Accumulate information due to the laser scanner onto the _fim matrix.
+  // Each additional information is in the body frame. In the 'get_covariance(...)'
+  // function (if points have to been registered) this is projected onto the world 
+  // frame.
+  Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
+  Eigen::Matrix3d dcm		  = laser_proc.get_calib_params().relative_pose.topLeftCorner<3, 3>();	// Rotation matrix
+  Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
+  double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
 
-	// Accumulate information due to the laser scanner onto the _fim matrix.
-	// Each additional information is in the body frame. In the 'get_covariance(...)'
-	// function (if points have to been registered) this is projected onto the world 
-	// frame.
-	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
-	Eigen::Matrix3d dcm		= laser_proc.get_calib_params().relative_pose.topLeftCorner<3, 3>();	// Rotation matrix
-	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
-	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
-	
-	fim_xyp = laser_proc.get_fim();
+  fim_xyp = laser_proc.get_fim();
 
-	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
-	
-	fim_xyz = dcm.transpose() * fim_xyz * dcm;
-	
-	fi_p = fim_xyp(2, 2) * dcm(2, 2);
+  fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
 
-	_fim.block<3, 3>(0, 0) += fim_xyz;
-	_fim(3, 3) += fi_p;
+  fim_xyz = dcm.transpose() * fim_xyz * dcm;
 
-	_num_laser_pushes++;
+  fi_p = fim_xyp(2, 2) * dcm(2, 2);
 
-	return true;
+  _fim.block<3, 3>(0, 0) += fim_xyz;
+  _fim(3, 3) += fi_p;
+
+  return true;
 }
 
 
+/* DEPRECATED */
 bool RangeBasedRoofLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id, bool clean_start){
-	// ### This still does not incorporate the color information
-	ASSERT(mask.size() == 0 || data.ranges.size() == mask.size(), "mask and data size should be the same.");
-	ASSERT(cluster_id != 0, "Cluster \"0\" is reserved.");
+  // ### This still does not incorporate the color information
+  ASSERT(mask.size() == 0 || data.ranges.size() == mask.size(), "mask and data size should be the same.");
+  ASSERT(cluster_id != 0, "Cluster \"0\" is reserved.");
 
-	if(clean_start == true)
-		_reset();
+  if(clean_start == true)
+    _reset();
 
-	// Reserve required space to prevent repetitive memory allocation
-	_cloud->points.reserve(_cloud->points.size() + data.ranges.size());
+  // Reserve required space to prevent repetitive memory allocation
+  _cloud->points.reserve(_cloud->points.size() + data.ranges.size());
 
-	Eigen::Vector4d pt;
-	double th = data.angle_min;
-	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
-		if(mask.size() != 0 && mask[i] != cluster_id)
-			continue;
-		utils::laser::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
-		pt(2) = pt(3) = 0;
-		pt = rel_pose * pt;
-		_cloud->points.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
-	}
+  Eigen::Vector4d pt;
+  double th = data.angle_min;
+  for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
+    if(mask.size() != 0 && mask[i] != cluster_id)
+      continue;
+    utils::laser::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
+    pt(2) = pt(3) = 0;
+    pt = rel_pose * pt;
+    _cloud->points.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
+  }
 
-	// Accumulate information due to the laser scanner onto the _fim matrix.
-	// Each additional information is in the body frame. In the 'get_covariance(...)'
-	// function (if points have to been registered) this is projected onto the world 
-	// frame.
-	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
-	Eigen::Matrix3d dcm		= rel_pose.topLeftCorner<3, 3>();	// Rotation matrix
-	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
-	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
-	
-	utils::laser::get_fim(data, mask, fim_xyp, cluster_id);
+  // Accumulate information due to the laser scanner onto the _fim matrix.
+  // Each additional information is in the body frame. In the 'get_covariance(...)'
+  // function (if points have to been registered) this is projected onto the world 
+  // frame.
+  Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
+  Eigen::Matrix3d dcm		= rel_pose.topLeftCorner<3, 3>();	// Rotation matrix
+  Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
+  double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
 
-	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
-	
-	fim_xyz = dcm.transpose() * fim_xyz * dcm;
-	
-	fi_p = fim_xyp(2, 2) * dcm(2, 2);
+  utils::laser::get_fim(data, mask, fim_xyp, cluster_id);
 
-	_fim.block<3, 3>(0, 0) += fim_xyz;
-	_fim(3, 3) += fi_p;
+  fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
 
-	_num_laser_pushes++;
+  fim_xyz = dcm.transpose() * fim_xyz * dcm;
 
-	return true;
+  fi_p = fim_xyp(2, 2) * dcm(2, 2);
+
+  _fim.block<3, 3>(0, 0) += fim_xyz;
+  _fim(3, 3) += fi_p;
+
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::push_rgbd_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::PointCloud2 &data, const vector<char> &mask, char cluster_id, bool clean_start){
-	// ### This still does not incorporate the color information
-	ASSERT(mask.size() == 0 || data.data.size() == mask.size(), "mask and data size should be the same.");
-	ASSERT(cluster_id != 0, "Cluster \"0\" is reserved.");
+  // ### This still does not incorporate the color information
+  ASSERT(mask.size() == 0 || data.data.size() == mask.size(), "mask and data size should be the same.");
+  ASSERT(cluster_id != 0, "Cluster \"0\" is reserved.");
 
-	if(clean_start == true)
-		_reset();
+  if(clean_start == true)
+    _reset();
 
-	// Reserve required space to prevent repetitive memory allocation
-	_cloud->points.reserve(_cloud->points.size() + data.data.size());
+  // Reserve required space to prevent repetitive memory allocation
+  _cloud->points.reserve(_cloud->points.size() + data.data.size());
 
-	Eigen::Vector4d pt;
-	
-	ROS_WARN("\"push_rgbd_data(...)\" is not implemented yet!");
-	for(int i = 0 ; i < (int)data.data.size() ; i++){
-		if(mask.size() != 0 || mask[i] == false)
-			continue;
-		// ### To be implemented!
-	}
+  Eigen::Vector4d pt;
 
-	_num_rgbd_pushes++;
-	return true;
+  ROS_WARN("\"push_rgbd_data(...)\" is not implemented yet!");
+  for(int i = 0 ; i < (int)data.data.size() ; i++){
+    if(mask.size() != 0 || mask[i] == false)
+      continue;
+    // ### To be implemented!
+  }
+
+  _num_rgbd_pushes++;
+  return true;
 }
 
 int RangeBasedRoofLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, const octomap::OcTree &octomap){
-	// ### This will cause memory leak!!!
-	_cloud_aligned = pcl::PointCloud<pcl::PointXYZ>().makeShared();
-	// Initialize '_cloud_aligned' by transforming the collective point cloud
-	// with the initial pose.
 
-	pcl::transformPointCloud(*_cloud, *_cloud_aligned, init_pose);
+  int num_laser_pushes = _laser_procs.size();
+  // The below set of vectors are populated by ray casting
+  // each LaserProc data onto the map. Hence the length of
+  // these vectors are of the same size as the _laser_procs
+  // vector.
+  vector<vector<int> >      masks(num_laser_pushes);
+  vector<vector<double> >	  ranges(num_laser_pushes);
+  vector<vector<double> >	  ths(num_laser_pushes);
 
-	// Steps : 
-	// (1) - For each ray, find the point of intersection. Use ray-casting of PCL-Octree
-	// (2) - Prepare the matrix A and vector b s.t.  A*x = b
-	// (3) - Solve for A*x = b where x = [cos(th) sin(th), dy, dz]'.
-	// (4) - Repeat for _max_iter's or tolerance conditions are met
-	// (*) - Use weighing to eliminate outliers.
-	int num_pts = _cloud_aligned->points.size();
-	int num_valid_pts = 0;	// # of data points intersecting with the map.
-	double dTz = 0;			// update along the z-coordinate.
+  vector<Eigen::Matrix4d> sensor_relative_poses(num_laser_pushes);
+  vector<Eigen::Matrix4d> sensor_relative_poses_inv(num_laser_pushes);
 
-	Eigen::MatrixXd A(2 * num_pts, 4);
-	Eigen::VectorXd b(2 * num_pts);
-	Eigen::Vector4d x;		// solution to Ax=b, 
-	Eigen::Vector3d rpy;	// roll-pitch-yaw
-	Eigen::Vector3f pos;	// initial position of the robot.
-							// This is given as argument to ray-caster.
-	//Eigen::Vector3f ray;
-	Eigen::Vector3d res_vec;
+  for(int i = 0 ; i < num_laser_pushes ; i++){
+    masks[i] = _laser_procs[i]->get_mask();
+    for(int j = 0 ; j < (int)masks[i].size() ; j++)
+      masks[i][j] = masks[i][j] <= 0 ? 0 : 1;
+    ranges[i].resize(masks[i].size());
+    ths[i].resize(masks[i].size());
+    sensor_relative_poses[i] = _laser_procs[i]->get_calib_params().relative_pose;
+    sensor_relative_poses_inv[i] =  sensor_relative_poses[i].inverse();
+  }
 
-	octomap::point3d origin, ray, end;
+  /* up until here, I did only initialization ----------------------------------- */
+  /* ---------------------------------------------------------------------------- */
 
-	Eigen::Matrix4d curr_pose = init_pose; // 'current' pose after each iteration.
+  // * robot pose in world frame
+  Eigen::Matrix4d	pose = init_pose;
+  // * sensor pose (and its inverse) in world frame
+  Eigen::Matrix4d sensor_pose, sensor_pose_inv;
+  // * sensor pose in SE(3) with zero translation for SE(3) transformations
+  Eigen::Matrix4d sensor_relative_pose_no_trans, 
+                  sensor_relative_pose_no_trans_inv;
+  sensor_relative_pose_no_trans     = Eigen::Matrix4d::Identity();
+  sensor_relative_pose_no_trans_inv = Eigen::Matrix4d::Identity();
+  // * rotation component of the sensor pose
+  Eigen::Matrix3d sensor_pose_dcm, sensor_pose_inv_dcm;
+  // * translation component of the sensor pose
+  Eigen::Vector3d sensor_pose_t;
+  // * pose update at every iteration
+  Eigen::Matrix4d dpose;
 
-	//pos = curr_pose.topRightCorner<3, 1>().cast<float>();
-	pos.x() = curr_pose(0, 3);
-	pos.y() = curr_pose(1, 3);
-	pos.z() = curr_pose(2, 3);
+  // * Temporary rotation matrix etc. used for 3D ray projection.
+  Eigen::Vector3d csm_init_pose, temp;
+  Eigen::Vector5d csm_result;
 
-	_matched_map_pts.resize(num_pts);
+  csm_init_pose(0) = 0; // x
+  csm_init_pose(1) = 0; // y
+  csm_init_pose(2) = 0; // apply the rotation in the below loop instead
 
-	//cout << "initial pose in the localizer : " << endl;
-	//cout << "curr_pose = " << curr_pose << endl;
+  // * translational and rotational updates at each iteration
+  vector<double>   t_update(num_laser_pushes);
+  vector<double> rot_update(num_laser_pushes);
 
-	int iter;
-	bool converged = false;
-	for(iter = 0 ; iter < _max_iters ; iter++){
-		Eigen::Vector3f prev_point(9999, 9999, 9999);
-		cout << "----------------------------" << endl;
-		cout << "iter = " << iter << endl;
-		//cout << "pose = " << pos  << endl;
-		num_valid_pts = 0;
-		_fitness_scores[0] = _fitness_scores[1] = _fitness_scores[2] = 0;
-
-		origin.x() = pos(0);
-		origin.y() = pos(1);
-		origin.z() = pos(2);
-
-		static vector<octomap::point3d> contour;
-		static vector<bool> ray_cast_suc;
-		contour.resize(num_pts);
-		ray_cast_suc.resize(num_pts);
-		for(int i = 0 ; i < num_pts ; i++){
-			// Get the ray in the body frame ()
-			ray.x() = _cloud_aligned->points[i].x - pos(0);
-			ray.y() = _cloud_aligned->points[i].y - pos(1);
-			ray.z() = _cloud_aligned->points[i].z - pos(2);
-
-			// Fetch only the first intersection point
-			//cout << "origin = " << origin << endl;
-			//cout << "ray    = " << ray << endl;
-			bool suc = octomap.castRay(origin, ray * 0.001, end, true, 19.0);
-			ray_cast_suc[i] = suc;
-			if(suc == true)
-				contour[i] = end;
-			else 
-				contour[i].x() = 9999999;
-		}
-
-		cout << "pts = [ " << endl;
-		for(int i = 0 ; i < num_pts ; i++){		
-			// If there was no intersection, nullify the effect by zero'ing the corresponding equation
-			if(ray_cast_suc[i] == false){
-				A.block<2, 4>(2 * i, 0).setZero();
-				b(2 * i) = b(2 * i + 1) = 0;
-				_matched_map_pts[i].x = 
-					_matched_map_pts[i].y = 
-					_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
-			} else {
-				octomap::point3d ray_tip;
-				ray_tip.x() = _cloud_aligned->points[i].x;
-				ray_tip.y() = _cloud_aligned->points[i].y;
-				ray_tip.z() = _cloud_aligned->points[i].z;
+  // * CSM parameters (hardcoded for now)
+  bool    recover_from_error = true;
+  double  max_angular_correction_deg = 20;
+  double  max_linear_correction = .5;
+  int     max_iterations = 1000;
+  double  epsilon_xy = 0.001;
+  double  epsilon_theta = 0.001;
+  double  max_correspondence_dist =  2;
+  double  sigma = 0.01;
+  bool    use_corr_tricks = false;
+  bool    restart = true;
+  double  restart_threshold_mean_error = 0.05;
+  double  restart_dt = 0.05;
+  double  restart_dtheta = 5 * 0.0261799;
 
 
-				double min_dist = 9999;
-				int    min_dist_idx = 0;
-				for(int j = 0 ; j < num_pts ; j++){
-					double curr_dist = (ray_tip - contour[j]).norm();
-					if(curr_dist < min_dist){
-						min_dist = curr_dist;
-						min_dist_idx = j;
-					}
-				}
+  static int index = 1;
 
-				end = contour[min_dist_idx];
+  for(int iter = 0 ; iter < _max_iter * num_laser_pushes ; iter++, index++){
+    cout << "% ------------------------------------------------------%" << endl;
+    cout << "iter = " << iter << ";" << endl;
 
-				/* 
-					1 - Get the previous and next points.
-					2 - Compare attack angle to the corresponding lines.
-					3 - Pick the line with the largest dot product value.
-					4 - If the dot product is less than 0, the closest point
-						is the end-point
-					5 - If 4 does not hold dot product the distance to the
-						end-point with the normal vector. This becomes the
-						point-to-line distance.
-				*/	
-				
-				octomap::point3d prev_pt, next_pt;
-				if(min_dist_idx - 1 < 0){
-					next_pt = contour[min_dist_idx + 1];
-					prev_pt = next_pt;
-				} else if(min_dist_idx + 1 >= (int)contour.size()){
-					prev_pt = contour[min_dist_idx - 1];
-					next_pt = prev_pt;
-				} else {
-					prev_pt = contour[min_dist_idx - 1];
-					next_pt = contour[min_dist_idx + 1];
-				}
+    // * index of the current contained set
+    int idx = iter % num_laser_pushes;
 
-				double dot1, dot2;
-				octomap::point3d ray0, ray1, ray2;
-				ray0 = ray_tip - end;
-				ray1 = next_pt - end;
-				ray2 = prev_pt - end;
-				dot1 = ray0.dot(ray1) / ray0.norm() / ray1.norm();
-				dot2 = ray0.dot(ray2) / ray0.norm() / ray2.norm();
+    // * polar -> 3D Euclidean converted laser rays
+    const vector<Eigen::Vector3d> &_3d_rays	 = _laser_procs[idx]->get_3d_points();
 
+    // * Current sensor pose and its inverse
+    sensor_pose         = pose * sensor_relative_poses[idx];
+    sensor_pose_t       = sensor_pose.topRightCorner<3, 1>();
+    sensor_pose_dcm     = sensor_pose.topLeftCorner<3, 3>();
+    sensor_pose_inv     = sensor_pose.inverse();
+    sensor_pose_inv_dcm = sensor_pose_inv.topLeftCorner<3, 3>();
+    sensor_relative_pose_no_trans.topLeftCorner<3, 3>()     = sensor_relative_poses    [idx].topLeftCorner<3, 3>();
+    sensor_relative_pose_no_trans_inv.topLeftCorner<3, 3>() = sensor_relative_poses_inv[idx].topLeftCorner<3, 3>();
+ 
+    /*
+    cout << "pose = " << endl << pose << endl;
+    cout << "sensor_pose = " << endl << sensor_pose << endl;
+    cout << "sensor_pose_t = " << endl << sensor_pose_t << endl;
+    cout << "sensor_pose_dcm = " << endl << sensor_pose_dcm << endl;
+    cout << "sensor_relative_pose_no_trans = " << endl << sensor_relative_pose_no_trans << endl;
+    cout << "sensor_relative_pose_no_trans_inv = " << endl << sensor_relative_pose_no_trans_inv << endl;
+    */
 
-				if(dot1 < 0 && dot2 < 0){
-					// Closest point on the line the 
-					// 'end' end-point.	
-				} else {
-					if(dot1 > dot2){
-						//end = end + ray0; - ray1 * (1 / ray1.norm()) * (ray0.norm() * dot1);
-					} else {
-						//end = end + ray0; - ray2 * (1 / ray2.norm()) * (ray0.norm() * dot2);
-					}
-				}
+    // Apply the initial transformation on the lidar data 
+    // and re-calculate the angles
+    octomap::point3d cast_origin(sensor_pose_t(0), sensor_pose_t(1), sensor_pose_t(2));
+    octomap::point3d cast_direction, cast_end;
 
-				/* */
+    //cout << "cast_origin{" << index << "} = [" << cast_origin << "]" << endl;
+    //cout << "cast_end{" << index << "} = [" << endl;
+    for(int i = 0 ; i < (int)_3d_rays.size() ; i++){
+      temp = sensor_pose_dcm * _3d_rays[i];
+      cast_direction.x() = temp(0);
+      cast_direction.y() = temp(1);
+      cast_direction.z() = temp(2);
+      bool suc = octomap.castRay(cast_origin, cast_direction, cast_end, true, 19.0 /* max range */);
+      //cout << cast_end.x() << ", " << cast_end.y() << ", " << cast_end.z() << ";" << endl;
+      if(suc == true){
+        temp(0) = cast_end.x();
+        temp(1) = cast_end.y();
+        temp(2) = cast_end.z();
+        temp = sensor_pose_inv_dcm * (temp - sensor_pose_t); 
+        temp(2) = 0;
+        ranges[idx][i] = temp.norm();
+        ths[idx][i] = atan2(temp(1), temp(0));
+        masks[idx][i] = 1;
+      } else {
+        masks[idx][i] = 0;
+      }
+    }
+    //cout << "];" << endl;
 
+    // Find 2D transformations with CSM 
+    csm_result = utils::laser::register_scan( ranges[idx], masks[idx], ths[idx],
+                _laser_procs[idx]->get_ranges(), _laser_procs[idx]->get_mask(), _laser_procs[idx]->get_thetas(), 
+                csm_init_pose, recover_from_error, max_angular_correction_deg, max_linear_correction, 
+                max_iterations, epsilon_xy, epsilon_theta, max_correspondence_dist, sigma, use_corr_tricks, restart, restart_threshold_mean_error, 
+                restart_dt, restart_dtheta); 
 
-				//cout << "% match #" << i << endl;
-				//cout << ray_tip << endl;
-				//cout << end << endl;		
+    //csm_result(0) *= -1;
+    //csm_result(1) *= -1;
+    //csm_result(2) *= -1;
+    
+    /*
+    cout << "csm_result{" << index << "} = [" << csm_result << "];" << endl;
 
-				cout << _cloud_aligned->points[i].x << ", " << 
-						_cloud_aligned->points[i].y << ", " <<
-						_cloud_aligned->points[i].z << endl;
-				cout << end.x() << ", " << end.y() << ", " << end.z() << endl;
+    cout << "m{" << index << "} = [ " << endl;
+    for(int i = 0 ; i < (int)ranges[idx].size() ; i++){
+      if(masks[idx][i] != 0)
+        cout << ranges[idx][i] << ", " << ths[idx][i] << ", " << 0 << endl;
+      if(_laser_procs[idx]->get_mask()[i] > 0) 
+        cout << _laser_procs[idx]->get_ranges()[i] << ", " << _laser_procs[idx]->get_thetas()[i] << ", " << 1 << endl;
+    }
+    cout << "];" << endl;
+    */
 
-				// Get the ray in the body frame ()
-				ray.x() = _cloud_aligned->points[i].x - pos(0);
-				ray.y() = _cloud_aligned->points[i].y - pos(1);
-				ray.z() = _cloud_aligned->points[i].z - pos(2);
-				A(2*i, 0) =  ray.x();
-				A(2*i, 1) = -ray.y();
-				A(2*i, 2) =  1;
-				A(2*i, 3) =  0;
-				A(2*i + 1, 0) = ray.y();
-				A(2*i + 1, 1) = ray.x();
-				A(2*i + 1, 2) = 0;
-				A(2*i + 1, 3) = 1;
+    if(csm_result(3) == 0){
+      //cout << "invalid CSM" << endl;
+      cout << csm_result(4) << endl;
+      continue;
+    }
 
-				// Save the matched point
-				_matched_map_pts[i].x = end.x();
-				_matched_map_pts[i].y = end.y();
-				_matched_map_pts[i].z = end.z();
+    // * trans from 1st sensor frame to 0th sensor frame
+    dpose = Eigen::Matrix4d::Identity();
+    dpose.topLeftCorner<3, 3>() = utils::trans::yaw2dcm(csm_result(2));
+    dpose(0, 3) = csm_result(0);
+    dpose(1, 3) = csm_result(1);
+    //dpose = dpose.inverse();
 
-				if(converged == true)
-					break;
+    // cout << "dpose[0] = " << endl << dpose << endl << endl;
 
-				// Use only the y-comp of the residual vector. Because 
-				// this is going to contribute to y and yaw updates only.
-				b(2*i)     = end.x() - pos(0);
-				b(2*i + 1) = end.y() - pos(1);
-				// Get the residual vector 
-				res_vec(0) = _cloud_aligned->points[i].x - end.x();
-				res_vec(1) = _cloud_aligned->points[i].y - end.y();
-				res_vec(2) = _cloud_aligned->points[i].z - end.z();
+    // * trans. from 1st robot frame to 0th robot frame
+    dpose = sensor_relative_pose_no_trans * dpose * sensor_relative_pose_no_trans_inv;
 
-				// Update the delta-z-estimate according to the direction of the 
-				// corresponding ray's z component. The update factor is weighed using
-				// ML outlier elimination.
-				dTz += -res_vec(2) * (exp(pow(fabs(ray(2) / ray.norm()), 1.0) - 1));
-				// Calculate a weighing coefficent for ML outlier elimination
-				// regarding y-yaw DOFs
-				
-				double dir_weight = pow(exp(sqrt(ray(0) * ray(0) + ray(1) * ray(1)) / ray.norm()), 2) - 1;
-				double weight = exp(-pow(res_vec.squaredNorm(), 2.5));
-				weight = res_vec.norm() >= 2.50 ? exp(-2.50) : weight;
-				//weight = 1; 
-				//double weight = res_vec.norm() > 0.5 ? 0 : 1;
-				b(2 * i) *= weight * dir_weight;
-				b(2 * i + 1) *= weight * dir_weight;
-				A.block<2, 4>(2 * i, 0) *= weight * dir_weight;
-				//double weight_x = exp(-fabs(res_vec(0) / res_vec.norm()));
-				//double weight_y = exp(-fabs(res_vec(1) / res_vec.norm()));
-				//b(2 * i) *= weight_x;
-				//b(2 * i + 1) *= weight_y;
-				//A.block<1, 4>(2 * i, 0) *= weight_x;
-				//A.block<1, 4>(2 * i + 1, 0) *= weight_y;
-				
-				num_valid_pts++;
+    // cout << "dpose[1] = " << endl << dpose << endl << endl;
 
-				_fitness_scores[0] += res_vec[1] * res_vec[1];
-				_fitness_scores[1] += res_vec[2] * res_vec[2];
-				_fitness_scores[2] += res_vec[1] * res_vec[1] * ray(0) * ray(0);
-			}	
-		}
+    pose = pose * dpose;
 
-		cout << "];" << endl;
+    // cout << "pose = " << endl << pose << endl << endl;
 
-		if(converged == true)
-			break;
+    cout << "yaw{" << index << "} = " << utils::trans::dcm2rpy(pose.topLeftCorner<3, 3>())(2) / PI * 180 << endl;
 
-		// Solve for the least squares solution.
-		x = (A.transpose() * A).inverse() * A.transpose() * b;
+    t_update[idx]   = dpose.topRightCorner<3, 1>().norm();
+    rot_update[idx] = utils::trans::dcm2rpy(dpose.topLeftCorner<3, 3>()).cwiseAbs().maxCoeff();
 
-		cout << "res : " << A * x - b << endl;
+    if( iter >= num_laser_pushes &&
+        std::accumulate(  t_update.begin(),   t_update.end(), 0) < _xyz_tol && 
+        std::accumulate(rot_update.begin(), rot_update.end(), 0) < _rot_tol){
+        //cout << "exiting iterations." << endl;
+        break;
+      }
+  }
 
-		//cout << "x = " << x << endl;
+  _pose = pose;
 
-		// Get the mean of dTz since it has been accumulated
-		dTz /= num_valid_pts;
-		_fitness_scores[0] /= num_valid_pts;
-		_fitness_scores[1] /= num_valid_pts;
-		_fitness_scores[2] /= num_valid_pts;
-
-		// x = [cos(yaw) sin(yaw) dY]
-		x(0) = fabs(x(0)) > 1 ? x(0) / fabs(x(0)) : x(0);
-		double dyaw = 1.0 * atan2(x(1), x(0));
-
-		// Update the position
-		pos(0) += x(2); // x-update 
-		pos(1) += x(3); // y-update 
-		pos(2) += dTz;	// z-update
-
-		// Convert the orientation to 'rpy', update yaw and 
-		// convert back to dcm.
-		Eigen::Matrix3d dcm = curr_pose.topLeftCorner<3, 3>();
-		rpy = utils::trans::dcm2rpy(dcm);
-		rpy(2) += dyaw;
-		//cout << "dyaw = " << dyaw / 3.14 * 180<< endl;
-		//cout << "rpy = " << rpy << endl;
-		dcm = utils::trans::rpy2dcm(rpy);
-
-		// Update the global pose matrix.
-		curr_pose.topLeftCorner<3, 3>() = dcm;
-		//pos *= 1.5;
-		curr_pose(0, 3) = pos(0);
-		curr_pose(1, 3) = pos(1);
-		curr_pose(2, 3) = pos(2);
-	
-		// Transform points for next iteration.
-		pcl::transformPointCloud(*_cloud, *_cloud_aligned, curr_pose);
-
-		//break;
-		if(fabs(x(2)) < _xyz_tol && fabs(x(3)) < _xyz_tol && fabs(dTz) < _xyz_tol && fabs(dyaw) < _yaw_tol)
-			converged = true;
-	}
-
-	_pose = curr_pose;
-
-	//cout << "estimated pose in the localizer : " << endl;
-	//cout << "_pose = "  << _pose << endl;
-
-	return iter;
+  return 0;
 }
 
 bool RangeBasedRoofLocalizer::get_pose(Eigen::Matrix4d &pose){
-    pose = _pose.cast<double>();
-	return true;
+  pose = _pose;
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::get_registered_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){	
-	pc = _cloud_aligned;
-	return true;
+  pc = _cloud_aligned;
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::get_covariance(Eigen::Matrix6d &cov, bool apply_fitness_result){
-	// ### I have to find a way to project uncertainties in orientation
-	// to other frame sets.
-	// ### I might have to fix some elements before inverting
-	for(int i = 0 ; i < 6 ; i++){
-		if(fabs(_fim(i, i)) < 0.01)
-			_fim(i, i) = 0.01;
-	}
+  // ### I have to find a way to project uncertainties in orientation
+  // to other frame sets.
+  // ### I might have to fix some elements before inverting
+  for(int i = 0 ; i < 6 ; i++){
+    if(fabs(_fim(i, i)) < 0.01)
+      _fim(i, i) = 0.01;
+  }
 
-	// ### This assumes uniform covariance for each rays, and superficially
-	// handles the uncertainties. I should first run ICP and then
-	// find '_fim' and so on. This will require a lot of bookkeeping etc.
-	// Thus leaving to a later version :)
-	if(apply_fitness_result){
-		Eigen::EigenSolver<Eigen::Matrix6d> es;
-		es.compute(_fim, true);
-		Eigen::MatrixXcd D = es.eigenvalues().asDiagonal();
-		Eigen::MatrixXcd V = es.eigenvectors();
-		// ### Is the rotation ypr/rpy ???
-		// We assume that 0.001 m^2 variance is perfect fit, or unit information.
-		D(1, 1) /= exp(_fitness_scores[0] / 0.001);
-		D(2, 2) /= exp(_fitness_scores[1] / 0.001);
-		D(3, 3) /= exp(_fitness_scores[2] / 0.001);
-		cov =  (V.transpose() * D.inverse() * V).real();
-	} else
-		cov = _fim.inverse();
-	return true;
+  // ### This assumes uniform covariance for each rays, and superficially
+  // handles the uncertainties. I should first run ICP and then
+  // find '_fim' and so on. This will require a lot of bookkeeping etc.
+  // Thus leaving to a later version :)
+  if(apply_fitness_result){
+    Eigen::EigenSolver<Eigen::Matrix6d> es;
+    es.compute(_fim, true);
+    Eigen::MatrixXcd D = es.eigenvalues().asDiagonal();
+    Eigen::MatrixXcd V = es.eigenvectors();
+    // ### Is the rotation ypr/rpy ???
+    // We assume that 0.001 m^2 variance is perfect fit, or unit information.
+    D(1, 1) /= exp(_fitness_scores[0] / 0.001);
+    D(2, 2) /= exp(_fitness_scores[1] / 0.001);
+    D(3, 3) /= exp(_fitness_scores[2] / 0.001);
+    cov =  (V.transpose() * D.inverse() * V).real();
+  } else
+    cov = _fim.inverse();
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::get_fitness_scores(double &y, double &z, double &yaw){
-	y   = _fitness_scores[0];
-	z   = _fitness_scores[1];
-	yaw = _fitness_scores[2];
-	return true;
+  y   = _fitness_scores[0];
+  z   = _fitness_scores[1];
+  yaw = _fitness_scores[2];
+  return true;
 }
 
 bool RangeBasedRoofLocalizer::get_correspondences(vector<pcl::PointXYZ> &sensor_pts, vector<pcl::PointXYZ> &map_pts){
-	int num_valid_pts = 0;
-	for(int i = 0 ; i < (int)_matched_map_pts.size() ; i++)
-		if(isfinite(_matched_map_pts[i].y))
-			num_valid_pts++;
-	map_pts.resize(num_valid_pts);
-	sensor_pts.resize(num_valid_pts);
-	for(int i = 0, j = 0 ; i < (int)_cloud_aligned->points.size() ; i++){
-		if(isfinite(_matched_map_pts[i].y)){
-			sensor_pts[j] = _cloud_aligned->points[i];
-			map_pts[j] = _matched_map_pts[i];
-			j++;
-		}
-	}
-	return true;
+  int num_valid_pts = 0;
+  for(int i = 0 ; i < (int)_matched_map_pts.size() ; i++)
+    if(isfinite(_matched_map_pts[i].y))
+      num_valid_pts++;
+  map_pts.resize(num_valid_pts);
+  sensor_pts.resize(num_valid_pts);
+  for(int i = 0, j = 0 ; i < (int)_cloud_aligned->points.size() ; i++){
+    if(isfinite(_matched_map_pts[i].y)){
+      sensor_pts[j] = _cloud_aligned->points[i];
+      map_pts[j] = _matched_map_pts[i];
+      j++;
+    }
+  }
+  return true;
 }

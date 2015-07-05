@@ -11,10 +11,10 @@ const octomap::OcTree& RangeBasedRoofMapper::get_map(){
 bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const LaserProc &laser_proc, double extrude){
 	octomap::point3d sensor_origin;
 	Eigen::Matrix4d sensor_pose = pose * laser_proc.get_calib_params().relative_pose;
-	sensor_origin.x() = pose(0, 3);
-	sensor_origin.y() = pose(1, 3);
-	sensor_origin.z() = pose(2, 3);
-	Matrix3d dcm = sensor_pose.topLeftCorner<3, 3>();
+	sensor_origin.x() = sensor_pose(0, 3);
+	sensor_origin.y() = sensor_pose(1, 3);
+	sensor_origin.z() = sensor_pose(2, 3);
+	Eigen::Matrix3d dcm = sensor_pose.topLeftCorner<3, 3>();
 	
 	const vector<int> mask = laser_proc.get_mask();
 	const vector<Eigen::Vector3d> points_3d = laser_proc.get_3d_points();
@@ -24,28 +24,24 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const Las
 	octomath::Pose6D cloud_trans(0, 0, 0, 0, 0, 0);
 	_cloud.transformAbsolute(cloud_trans);
 
-
 	Vector4d pt;
 	for(int i = 0 ; i < (int)mask.size() ; i++){
-		if(mask[i] != false ){
+		if(mask[i] > 0 ){
 			pt.topLeftCorner<3, 1>() = points_3d[i]; 
 			pt(3) = 1;
-			pt = pose * pt;
+			pt = sensor_pose * pt;
 			_cloud.push_back(pt(0), pt(1), pt(2));
 		}
 	}
 
-	cout << "inserting point cloud from the pose : " << pose << endl;
-	cout << "extrude = " << extrude << endl;
-	cout << "# of points = " << _cloud.size() << endl;
+	//cout << "inserting point cloud from the pose : " << pose << endl;
+	//cout << "extrude = " << extrude << endl;
+	//cout << "# of points = " << _cloud.size() << endl;
 
 	if(extrude == 0){
-		//_octree.insertPointCloud(_cloud, sensor_origin); 	
 		for(int i = 0 ; i < (int)_cloud.size() ; i++)
 			_octree.updateNode(	_cloud.getPoint(i), true, true);
-		//_octree.updateInnerOccupancy();
 	} else {
-		//cout << "Q0" << endl;
 		Eigen::Vector3d zvec(0, 0, 1);
 		zvec = dcm * zvec;
 		// Extrusion should be either in +-z-world axis or
@@ -57,33 +53,19 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const Las
 		else
 			zvec(2) = 0;
 		zvec.normalize();
-		//cout << "Q1" << endl;
 
-		cout << "zvec = " << zvec << endl;
-
-		for(double dz = -extrude ; dz <= extrude ; dz += _res/2){
-			//cout << "Q1.1" << endl;
-			octomap::point3d origin = sensor_origin;
-			//origin.x() += dz * zvec(0);
-			//origin.y() += dz * zvec(1);
-			//origin.z() += dz * zvec(2);
-			//cout << "Q1.2" << endl;
+		octomap::point3d origin = sensor_origin;
+		for(double dz = -extrude ; dz <= extrude ; dz += _res/2){	
 			cloud_trans.x() = dz * zvec(0);
 			cloud_trans.y() = dz * zvec(1);
 			cloud_trans.z() = dz * zvec(2);
 
-			cout << "cloud_trans = " << cloud_trans << endl;
-
 			_cloud.transformAbsolute(cloud_trans);
-			//cout << cloud.getPoint(0).x() << " " << cloud.getPoint(0).y() << " " << cloud.getPoint(0).z() << endl;
-
 			_octree.insertPointCloud(_cloud, origin);
-			//cout << "origin = " << origin << endl;
 		}
 	}
 
 	return true;
-
 }
 
 bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id, double extrude){
@@ -117,13 +99,12 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 
 	//extrude = 1;
 
-	cout << "inserting point cloud from the pose : " << pose << endl;
+	//cout << "inserting point cloud from the pose : " << pose << endl;
 
 	if(extrude == 0){
 		//_octree.insertPointCloud(_cloud, sensor_origin); 	
 		for(int i = 0 ; i < (int)_cloud.size() ; i++)
 			_octree.updateNode(	_cloud.getPoint(i), true, true);
-		//_octree.updateInnerOccupancy();
 	} else {
 		//cout << "Q0" << endl;
 		Eigen::Vector3d zvec(0, 0, 1);
@@ -139,7 +120,7 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 		zvec.normalize();
 		//cout << "Q1" << endl;
 
-		cout << "zvec = " << zvec << endl;
+		//cout << "zvec = " << zvec << endl;
 
 		for(double dz = -extrude ; dz <= extrude ; dz += _res/2){
 			//cout << "Q1.1" << endl;
@@ -152,7 +133,7 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 			cloud_trans.y() = dz * zvec(1);
 			cloud_trans.z() = dz * zvec(2);
 
-			cout << "cloud_trans = " << cloud_trans << endl;
+			//cout << "cloud_trans = " << cloud_trans << endl;
 
 			_cloud.transformAbsolute(cloud_trans);
 			//cout << cloud.getPoint(0).x() << " " << cloud.getPoint(0).y() << " " << cloud.getPoint(0).z() << endl;
@@ -161,6 +142,8 @@ bool RangeBasedRoofMapper::register_scan (const Eigen::Matrix4d &pose, const sen
 			//cout << "origin = " << origin << endl;
 		}
 	}
+
+	_octree.updateInnerOccupancy();
 
 	return true;
 }

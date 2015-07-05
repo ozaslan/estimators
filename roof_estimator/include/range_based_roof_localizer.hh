@@ -45,7 +45,6 @@
 
 class RangeBasedRoofLocalizer{
 private:
-	int _num_laser_pushes;	// Number of pushes since the last memory clean-up
 	int _num_rgbd_pushes;	// (the same as above)
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _cloud;			// Collective pointcloud sensor data
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _cloud_aligned;	// '_pc' after being aligned
@@ -54,9 +53,9 @@ private:
 	Eigen::Matrix4d _pose;		// Pose of the robot (output of ICP registration given as homo. SE(3))
 	Eigen::Matrix6d _fim;		// Fisher information matrix
 	double _fitness_scores[4];	// average of large residuals (see the ### ??? function for detailed explanation)
-	double _max_iters;			// maximum iterations of the ICP algorithm.
+	double _max_iter;			// maximum iterations of the ICP algorithm.
 	double _xyz_tol;				// translational tolerance value if updates of ICP is lower than which, iteration is stopped.
-	double _yaw_tol;			// same as '_yz_tol' for yaw.
+	double _rot_tol;			// same as '_yz_tol' for rotation.
 	// ### _skip_rays;			// number of rays to skip in ICP for performance improvement.
 
 	bool _get_covariance(const sensor_msgs::LaserScan &data, Eigen::Matrix3d &cov);
@@ -65,6 +64,8 @@ private:
 	// This function resets the internal flags, counters, clears the collvective 
 	// point cloud. This is called when 'push_X_data(...)' is called with 'reset' flag.
 	bool _reset();
+
+	vector<const LaserProc *> _laser_procs;
 public:
 	RangeBasedRoofLocalizer(int max_iter = 23, double xyz_tol = 0.01, double yaw_tol = 0.01);
 	// This adds laser points to the collective sensor pointcloud.

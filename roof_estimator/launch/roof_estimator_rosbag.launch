@@ -4,6 +4,8 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 <launch>
 
+<param name = "use_sim_time" value = "true" />
+
 #### Playback ROSBAG  ##############################
 
 
@@ -13,13 +15,15 @@ Example launch file: launches the scan matcher with pre-recorded data
 -->
 <!--
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/6April/state_farm02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine02.bag" />
 -->
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl01.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl02.bag" />
 <node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=.13 $(arg bagfile_path) --start=30 --duration=9999 --pause --quiet">
+    args  ="--loop --rate=.05 $(arg bagfile_path) --start=30 --duration=9999 --pause --quiet">
     <remap from="raw_imu" to="/khex/imu" />
 </node>
 
@@ -82,6 +86,8 @@ Example launch file: launches the scan matcher with pre-recorded data
     args  ="-d $(find roof_estimator)/rviz/roof_estimator.rviz">
 		<param name="fixed-frame"	 value="world"/>
 </node>
+
+<node pkg="tf" type="static_transform_publisher" name="laser_link" args="0 0 0 0 0 0 /laser /world 100"/>
 
 </launch>
 

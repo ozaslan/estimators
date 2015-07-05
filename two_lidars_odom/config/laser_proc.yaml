@@ -5,11 +5,11 @@ calib_file: ""
 median_filter: TRUE
 median_filter_window: 3
 downsample: TRUE
-downsample_thres: 0.05
-remove_occlusion: TRUE
+downsample_thres: 0.03
+remove_occlusion: FALSE
 remove_occlusion_thres: 0.50
 remove_occlusion_window: 3
-remove_slant_edges: TRUE
+remove_slant_edges: FALSE
 remove_slant_edges_thres: 1.4835
 remove_slant_edges_window: 3
 cluster: TRUE
@@ -23,4 +23,6 @@ extract_lines_min_len: 0.10
 extract_lines_min_pts: 3
 extract_lines_epsilon: 0.08
 project: FALSE
+intensity_filter: TRUE
+intensity_thres: 500.0
 
