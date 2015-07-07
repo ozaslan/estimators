@@ -63,7 +63,7 @@ private:
 	// point cloud. This is called when 'push_X_data(...)' is called with 'reset' flag.
 	bool _reset();
 public:
-	RangeBasedTunnelLocalizer(int max_iter = 133, double yz_tol = 0.01, double yaw_tol = 0.035);
+	RangeBasedTunnelLocalizer(int max_iter = 33, double yz_tol = 0.01, double yaw_tol = 0.035);
 	// ### Replace this with set_octree(...)
 	// This function sets the internal map pointer. Changes in the referenced 
 	// map do reflect to the internal copy of the map pointer. Thus this function
