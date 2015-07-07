@@ -1,7 +1,7 @@
 /*
-	See the header file for detailed explanations
-	of the below functions.
-*/
+   See the header file for detailed explanations
+   of the below functions.
+ */
 
 #include "range_based_tunnel_localizer.hh"
 
@@ -30,6 +30,52 @@ bool RangeBasedTunnelLocalizer::set_map(const pcl::PointCloud<pcl::PointXYZ>::Pt
 	return true;
 }
 
+bool RangeBasedTunnelLocalizer::push_laser_data(const LaserProc &laser_proc, bool clean_start){
+	const vector<int> &mask = laser_proc.get_mask();
+	const vector<Eigen::Vector3d> &_3d_pts = laser_proc.get_3d_points();
+
+	if(clean_start == true)
+		_reset();
+
+	// Reserve required space to prevent repetitive memory allocation
+	_cloud->points.reserve(_cloud->points.size() + mask.size());
+
+	for(int i = 0 ; i < (int)mask.size() ; i++){
+		if(mask[i] <= 0)
+			continue;
+		_cloud->points.push_back(pcl::PointXYZ(_3d_pts[i](0), _3d_pts[i](1), _3d_pts[i](2)));
+	}
+
+	// Accumulate information due to the laser scanner onto the _fim matrix.
+	// Each additional information is in the body frame. In the 'get_covariance(...)'
+	// function (if points have to been registered) this is projected onto the world 
+	// frame.
+	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();      // Fisher information for x, y, z coords.
+	Eigen::Matrix3d dcm     = laser_proc.get_calib_params().relative_pose.topLeftCorner<3, 3>();  // Rotation matrix
+	Eigen::Matrix3d fim_xyp;                                // Fisher information for x, y, yaw
+	double fi_p = 0;                                        // Fisher information for yaw only (neglecting correlative information)
+
+	fim_xyp = laser_proc.get_fim();
+
+	//cout << "fim_xyp = " << fim_xyp << endl;
+
+	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
+
+	fim_xyz = dcm * fim_xyz * dcm.transpose();
+
+	fi_p = fim_xyp(2, 2) * fabs(dcm(2, 2));
+
+	//cout << "dcm = [" << dcm << "];" << endl;
+
+	_fim.block<3, 3>(0, 0) += fim_xyz;
+	_fim(5, 5) += fi_p;
+
+	//cout << "_fim = [" << _fim << "];" << endl;
+
+	return true;
+
+}
+
 bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose, const sensor_msgs::LaserScan &data, const vector<char> &mask, char cluster_id, bool clean_start){
 	// ### This still does not incorporate the color information
 	ASSERT(mask.size() == 0 || data.ranges.size() == mask.size(), "mask and data size should be the same.");
@@ -46,7 +92,7 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 	for(int i = 0 ; i < (int)data.ranges.size() ; i++, th += data.angle_increment){
 		if(mask.size() != 0 && mask[i] != cluster_id)
 			continue;
-		utils::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
+		utils::laser::polar2euclidean(data.ranges[i], th, pt(0), pt(1));
 		pt(2) = pt(3) = 0;
 		pt = rel_pose * pt;
 		_cloud->points.push_back(pcl::PointXYZ(pt(0), pt(1), pt(2)));
@@ -60,17 +106,17 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 	Eigen::Matrix3d dcm		= rel_pose.topLeftCorner<3, 3>();	// Rotation matrix
 	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
 	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
-	
-	utils::get_fim(data, mask, fim_xyp, cluster_id);
+
+	utils::laser::get_fim(data, mask, fim_xyp, cluster_id);
 
 	fim_xyz.topLeftCorner<2, 2>() = fim_xyp.topLeftCorner<2, 2>();
-	
+
 	fim_xyz = dcm.transpose() * fim_xyz * dcm;
-	
+
 	fi_p = fim_xyp(2, 2) * dcm(2, 2);
 
 	_fim.block<3, 3>(0, 0) += fim_xyz;
-	_fim(3, 3) += fi_p;
+	_fim(5, 5) += fi_p;
 
 	_num_laser_pushes++;
 
@@ -89,7 +135,7 @@ bool RangeBasedTunnelLocalizer::push_rgbd_data(const Eigen::Matrix4d &rel_pose, 
 	_cloud->points.reserve(_cloud->points.size() + data.data.size());
 
 	Eigen::Vector4d pt;
-	
+
 	ROS_WARN("\"push_rgbd_data(...)\" is not implemented yet!");
 	for(int i = 0 ; i < (int)data.data.size() ; i++){
 		if(mask.size() != 0 || mask[i] == false)
@@ -121,9 +167,9 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 	Eigen::MatrixXd A(num_pts, 3);
 	Eigen::VectorXd b(num_pts);
 	Eigen::Vector3d x, rpy;	// solution to Ax=b, 
-							// roll-pitch-yaw
+	// roll-pitch-yaw
 	Eigen::Vector3f pos;	// initial position of the robot.
-							// This is given as argument to ray-caster.
+	// This is given as argument to ray-caster.
 	Eigen::Vector3f ray;
 	Eigen::Vector3d res_vec;
 
@@ -138,6 +184,7 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 
 	int iter;
 	for(iter = 0 ; iter < _max_iters ; iter++){
+		//cout << "projection pos = " << pos << endl;
 		num_valid_pts = 0;
 		_fitness_scores[0] = _fitness_scores[1] = _fitness_scores[2] = 0;
 		for(int i = 0 ; i < num_pts ; i++){
@@ -205,15 +252,15 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 		// Convert the orientation to 'rpy', update yaw and 
 		// convert back to dcm.
 		Eigen::Matrix3d dcm = curr_pose.topLeftCorner<3, 3>();
-		rpy = utils::dcm2rpy(dcm);
+		rpy = utils::trans::dcm2rpy(dcm);
 		rpy(2) += dyaw;
-		dcm = utils::rpy2dcm(rpy);
+		dcm = utils::trans::rpy2dcm(rpy);
 
 		// Update the global pose matrix.
 		curr_pose.topLeftCorner(3, 3) = dcm;
 		curr_pose(1, 3) = pos(1);
 		curr_pose(2, 3) = pos(2);
-	
+
 		// Transform points for next iteration.
 		pcl::transformPointCloud(*_cloud, *_cloud_aligned, curr_pose);
 
@@ -227,7 +274,7 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 }
 
 bool RangeBasedTunnelLocalizer::get_pose(Eigen::Matrix4d &pose){
-    pose = _pose.cast<double>();
+	pose = _pose.cast<double>();
 	return true;
 }
 
@@ -240,28 +287,48 @@ bool RangeBasedTunnelLocalizer::get_covariance(Eigen::Matrix6d &cov, bool apply_
 	// ### I have to find a way to project uncertainties in orientation
 	// to other frame sets.
 	// ### I might have to fix some elements before inverting
-	for(int i = 0 ; i < 6 ; i++){
-		if(fabs(_fim(i, i)) < 0.01)
-			_fim(i, i) = 0.01;
-	}
+	Eigen::EigenSolver<Eigen::Matrix6d> es;
+	es.compute(_fim, true);
+	Eigen::MatrixXd D = es.eigenvalues().real().asDiagonal();
+	Eigen::MatrixXd V = es.eigenvectors().real();
+
+
+	bool reconstruct = false;
+	for(int i = 0 ; i < 6 ; i++)
+		if(D(i, i) < 0.00001){
+			D(i, i) = 0.00001;
+			reconstruct = true;
+		}
+
+	if(reconstruct)
+		_fim = (V.transpose() * D * V).real();
+
+	//cout << "FIM = [" << _fim << "];" << endl;
 
 	// ### This assumes uniform covariance for each rays, and superficially
 	// handles the uncertainties. I should first run ICP and then
 	// find '_fim' and so on. This will require a lot of bookkeeping etc.
 	// Thus leaving to a later version :)
 	if(apply_fitness_result){
-		Eigen::EigenSolver<Eigen::Matrix6d> es;
-		es.compute(_fim, true);
-		Eigen::MatrixXcd D = es.eigenvalues().asDiagonal();
-		Eigen::MatrixXcd V = es.eigenvectors();
 		// ### Is the rotation ypr/rpy ???
 		// We assume that 0.001 m^2 variance is perfect fit, or unit information.
-		D(1, 1) /= exp(_fitness_scores[0] / 0.001);
-		D(2, 2) /= exp(_fitness_scores[1] / 0.001);
-		D(3, 3) /= exp(_fitness_scores[2] / 0.001);
-		cov =  (V.transpose() * D.inverse() * V).real();
-	} else
-		cov = _fim.inverse();
+		D(0, 0) /= exp(_fitness_scores[0] / 0.001);
+		D(1, 1) /= exp(_fitness_scores[1] / 0.001);
+		D(2, 2) /= exp(_fitness_scores[2] / 0.001);
+	}
+
+	for(int i = 0 ; i < 6 ; i++)
+		D(i, i) = 1 / D(i, i) + 0.00001;
+	cov = (V * D * V.transpose());
+
+	//cout << "V = [" << V << "];" << endl;
+	//cout << "D = [" << D << "];" << endl;
+	//cout << "cov = [ " << cov << "];" << endl;
+
+	cov.topLeftCorner<3, 3>	() = _pose.topLeftCorner<3, 3>().transpose() * 
+									cov.topLeftCorner<3, 3>() * 
+								 _pose.topLeftCorner<3, 3>();
+
 	return true;
 }
 

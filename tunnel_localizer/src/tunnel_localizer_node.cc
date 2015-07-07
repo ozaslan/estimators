@@ -1,137 +1,49 @@
-#include <list>
-#include <string>
-#include <iostream>
-
-#include <ros/ros.h>
-#include <nav_msgs/Odometry.h>
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/LaserScan.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <visualization_msgs/Marker.h>
-
-
-
-#include <utils.hh>
-#include <lidar_calib_params.hh>
-#include <camera_calib_params.hh>
-#include "tunnel_localizer.hh"
-
-/*
-	-- Process inputs
-		-- camera, laser, asus location yaml files (extrinsic calibration)
-		-- The above should also include intrinsics calibration as well
-	-- Setup messaging interface
-		-- laser, imu, rgbd, cameras, 
-		-- odom, visualization stuff
-	-- Loop
-		-- check sensor times before integration
-*/
-
-vector<pcl::PointXYZ> tails, tips;
-
-double refresh_rate;
-bool   debug_mode;
-
-ros::Publisher  odom_publ, 
-				laser_pc_publ,
-				res_rays_publ,
-				map_pc_publ,
-				flow_rays_publ;
-ros::Subscriber imu_subs,
-				top_lidar_subs,	bot_lidar_subs,
-				top_cam_subs, bottom_cam_subs, 
-				right_cam_subs, left_cam_subs,
-				grid_map_sub, odom_subs;
-// ### I might want to have a few more publisher for
-// visualization.
-
-// Calibration data is given as an argument together with
-// the corresponding sensor data.
-CameraCalibParams top_cam_calib_params;
-CameraCalibParams right_cam_calib_params;
-CameraCalibParams bottom_cam_calib_params;
-CameraCalibParams left_cam_calib_params;
-LidarCalibParams  top_lidar_calib_params;
-LidarCalibParams  bottom_lidar_calib_params;
-
-string map_path;
-pcl::PointCloud<pcl::PointXYZ>::Ptr grid_map;
-
-// TunnelLocalizer class wraps around the range based localizer and
-// image based localizer. Through pushing sensor data, corresponding
-// localizer is populated with sensor data. This continues until a
-// call to pose estimate routine which then flushes saved data.
-TunnelLocalizer tunnel_localizer;
-
-sensor_msgs::LaserScan bot_lidar_msg, top_lidar_msg;
-sensor_msgs::Image	top_cam_msg, bot_cam_msg, 
-					right_cam_msg, left_cam_msg;
-sensor_msgs::Imu imu_msg;
-nav_msgs::Odometry odom_msg_in, odom_msg_out;
-visualization_msgs::Marker res_rays_msg, flow_rays_msg;
-
-// An estimator is basically a process block which gets sensor
-// data as inputs and outputs an estimate. Also it can take
-// an initial value to pre-condition the estimator. The below functions
-// constitute the communication interface for sensor inputs.
-// We have 2 x lidars, 4 x cameras and an IMU.
-void imu_callback(const sensor_msgs::Imu &msg);
-void top_lidar_callback	(const sensor_msgs::LaserScan &msg);
-void bot_lidar_callback	(const sensor_msgs::LaserScan &msg);
-void top_cam_callback	(const sensor_msgs::Image &msg);
-void bottom_cam_callback(const sensor_msgs::Image &msg);
-void right_cam_callback	(const sensor_msgs::Image &msg);
-void left_cam_callback	(const sensor_msgs::Image &msg);
-void odom_callback		(const nav_msgs::Odometry &msg);
-
-// ------------------------------------------------------- //
-void process_inputs(const ros::NodeHandle &n);
-void setup_messaging_interface(ros::NodeHandle &n);
-void loop(const ros::NodeHandle &n);
-
-void publish_res_rays(const ros::NodeHandle &n);
-void publish_flow_rays(const ros::NodeHandle &n);
-
-static Eigen::Vector3d rpy;
-static Eigen::Vector4d quat;
-static Eigen::Matrix3d dcm;
-static Eigen::Matrix4d init_pose;
-static Eigen::Matrix4d estm_pose;
+#include "tunnel_localizer_node.hh"
 
 int main(int argc, char* argv[]){
 
-	ros::init(argc, argv, "tunnel_localizer");
-  	ros::NodeHandle n("~");
+	ros::init(argc, argv, "tunnel_localizer_node");
+	ros::NodeHandle n("~");
 
 	process_inputs(n);
 	setup_messaging_interface(n);
-	loop(n);	
-	
+	loop();	
+
 	return 1;
 }
 
 void process_inputs(const ros::NodeHandle &n)
 {
+	// Query for parameter file paths from the parameter server.
+	string top_cam_calib_file,
+		   right_cam_calib_file,
+		   bottom_cam_calib_file,
+		   left_cam_calib_file,
+		   top_lidar_calib_file,
+		   bottom_lidar_calib_file,
+		   map_path;
+
 	n.param("refresh_rate", refresh_rate, 100.0);
 	n.param("debug_mode", debug_mode, false);
-
-	// Query for parameter file paths from the parameter server.
-	string top_cam_calib_file;
-	string right_cam_calib_file;
-	string bottom_cam_calib_file;
-	string left_cam_calib_file;
-	string top_lidar_calib_file;
-	string bottom_lidar_calib_file;
-
+	
 	n.param("top_lidar_calib_file"		, top_lidar_calib_file	 , string("ERROR"));
 	n.param("bottom_lidar_calib_file"	, bottom_lidar_calib_file, string("ERROR"));
 	n.param("top_cam_calib_file"		, top_cam_calib_file	 , string("ERROR"));
 	n.param("right_cam_calib_file"		, right_cam_calib_file	 , string("ERROR"));
 	n.param("bottom_cam_calib_file"		, bottom_cam_calib_file	 , string("ERROR"));
 	n.param("left_cam_calib_file"		, left_cam_calib_file	 , string("ERROR"));
-	
+	n.param("median_filter_window"		, median_filter_window   , 5);
+	n.param("rate_linearity_window"     , rate_linearity_window  , 15);
+	n.param("downsample_thres"			, downsample_thres		 , 0.03);
+	n.param("remove_occlusion_thres"    , remove_occlusion_thres , 0.5);
+	n.param("remove_occlusion_window"   , remove_occlusion_window, 3);
+	n.param("cluster_min_skips"			, cluster_min_skips		 , 3);
+	n.param("cluster_range_jump"		, cluster_range_jump     , 0.50);
+	n.param("cluster_min_cluster_size"  , cluster_min_cluster_size, 3);
+	n.param("linearity_thres"			, linearity_thres		 , 0.3);
+
 	n.param("map_path", map_path, string(""));	
-	
+
 	// ### I have to get laser and camera intrinsic/extrinsic 
 	// parameters from the parameter server too.
 	// These include the laser dead regions, noise models,
@@ -144,35 +56,44 @@ void process_inputs(const ros::NodeHandle &n)
 	// for that), particle filter related parameters, failure case
 	// behaviors, 
 
-
 	ROS_INFO(" ---------- TUNNEL LOCALIZER ------------");
-	ROS_INFO("[refresh_rate] ---------- : [%.3f]", refresh_rate);
-	ROS_INFO("[debug_mode] ------------ : [%s]", debug_mode ? "TRUE" : "FALSE");
-	ROS_INFO("[map_path] -------------- : [%s]", map_path.c_str());
-	ROS_INFO("[top_lidar_calib_file] ---: [%s]", top_lidar_calib_file.c_str());
-	ROS_INFO("[bottom_lidar_calib_file] : [%s]", bottom_lidar_calib_file.c_str());
-	ROS_INFO("[top_cam_calib_file] -----: [%s]", top_cam_calib_file.c_str());
-	ROS_INFO("[right_cam_calib_file] ---: [%s]", right_cam_calib_file.c_str());
-	ROS_INFO("[bottom_cam_calib_file] --: [%s]", bottom_cam_calib_file.c_str());
-	ROS_INFO("[left_cam_calib_file] ----: [%s]", left_cam_calib_file.c_str());
+	ROS_INFO("[refresh_rate] ----------- : [%.3f]", refresh_rate);
+	ROS_INFO("[debug_mode] ------------- : [%s]"  , debug_mode ? "TRUE" : "FALSE");
+	ROS_INFO("[map_path] --------------- : [%s]"  , map_path.c_str());
+	ROS_INFO("[top_lidar_calib_file] --- : [%s]"  , top_lidar_calib_file.c_str());
+	ROS_INFO("[bottom_lidar_calib_file]  : [%s]"  , bottom_lidar_calib_file.c_str());
+	ROS_INFO("[top_cam_calib_file] ----- : [%s]"  , top_cam_calib_file.c_str());
+	ROS_INFO("[right_cam_calib_file] --- : [%s]"  , right_cam_calib_file.c_str());
+	ROS_INFO("[bottom_cam_calib_file] -- : [%s]"  , bottom_cam_calib_file.c_str());
+	ROS_INFO("[left_cam_calib_file] ---- : [%s]"  , left_cam_calib_file.c_str());
+	ROS_INFO("[median_filter_window] --- : [%d]"  , median_filter_window);
+	ROS_INFO("[rate_linearity_window] -- : [%.d]" , rate_linearity_window);
+	ROS_INFO("[downsample_thres] ------- : [%.3f]", downsample_thres);
+	ROS_INFO("[remove_occlusion_thres] - : [%.3f]", remove_occlusion_thres);
+	ROS_INFO("[remove_occlusion_window]  : [%d]"  , remove_occlusion_window);
+	ROS_INFO("[cluster_min_skips] ------ : [%d]"  , cluster_min_skips);
+	ROS_INFO("[cluster_range_jump] ----- : [%.3f]", cluster_range_jump);
+	ROS_INFO("[cluster_min_cluster_size] : [%d]"  , cluster_min_cluster_size);
+	ROS_INFO("[linearity_thres] -------- : [%.3f]", linearity_thres);
+
 	ROS_INFO(" ----------------------------------------");
 
 	// Load calibration data for each sensor. 
 	// ### (to be implemented) In case of load failure, 'is_valid'
 	// flag is set to 'false'.
-	
+
 	top_lidar_calib_params.load(top_lidar_calib_file);
-	//ROS_INFO("Top Lidar Calib Params :");
-	//top_lidar_calib_params.print();
-	
+	ROS_INFO("Top Lidar Calib Params :");
+	top_lidar_calib_params.print();
+
 	bottom_lidar_calib_params.load(bottom_lidar_calib_file);
-	//ROS_INFO("Bottom Lidar Calib Params :");
-	//bottom_lidar_calib_params.print();
+	ROS_INFO("Bottom Lidar Calib Params :");
+	bottom_lidar_calib_params.print();
 
 	top_cam_calib_params.load(top_cam_calib_file);
 	//ROS_INFO("Top Cam Calib Params :");
 	//top_cam_calib_params.print();
-	
+
 	right_cam_calib_params.load(right_cam_calib_file);
 	//ROS_INFO("Right Cam Calib Params :");
 	//right_cam_calib_params.print();
@@ -180,18 +101,20 @@ void process_inputs(const ros::NodeHandle &n)
 	bottom_cam_calib_params.load(bottom_cam_calib_file);
 	//ROS_INFO("Bottom Cam Calib Params :");
 	//bottom_cam_calib_params.print();
-	
+
 	left_cam_calib_params.load(left_cam_calib_file);
 	//ROS_INFO("Left Cam Calib Params :");
 	//left_cam_calib_params.print();
-	
+
 	pcl::PointCloud<pcl::PointXYZ> temp_grid_map;
 	grid_map = temp_grid_map.makeShared();
 	// Load the map from the given '.pcd' file path.
 	//if(pcl::io::loadPLYFile<pcl::PointXYZ> (map_path.c_str(), *grid_map) == -1){
+	ROS_INFO("... Loading map from '%s'", map_path.c_str());
 	if(pcl::io::loadPCDFile<pcl::PointXYZ> (map_path.c_str(), *grid_map) == -1){
 		ROS_ERROR ("Couldn't read file map file from the path : %s", map_path.c_str());
 	}
+	ROS_INFO("... Successfully loaded the map!");
 
 	tunnel_localizer.set_map(grid_map);
 }
@@ -202,8 +125,9 @@ void setup_messaging_interface(ros::NodeHandle &n)
 	// "output an estimate for X". This node's inputs are IMU, 2 x Scan and 
 	// 4 x Cams. Its output is the relative pose of the robot w.r.t. to the
 	// given map (if any).
-	odom_publ        = n.advertise<nav_msgs::Odometry>("odom", 10);
-	imu_subs         = n.subscribe("imu", 10    , imu_callback, ros::TransportHints().tcpNoDelay()); 
+	odom_publ        = n.advertise<nav_msgs::Odometry>("odom_out", 10);
+	imu_subs         = n.subscribe("imu"        , 10, imu_callback, ros::TransportHints().tcpNoDelay()); 
+	odom_subs        = n.subscribe("odom_in"    , 10, odom_callback     , ros::TransportHints().tcpNoDelay()); 
 	top_lidar_subs   = n.subscribe("scan/top"   , 10, top_lidar_callback, ros::TransportHints().tcpNoDelay()); 
 	bot_lidar_subs   = n.subscribe("scan/bottom", 10, bot_lidar_callback, ros::TransportHints().tcpNoDelay()); 
 	top_cam_subs	 = n.subscribe("cam/top"	, 10, top_cam_callback		, ros::TransportHints().tcpNoDelay()); 
@@ -211,7 +135,7 @@ void setup_messaging_interface(ros::NodeHandle &n)
 	right_cam_subs   = n.subscribe("cam/right"	, 10, right_cam_callback	, ros::TransportHints().tcpNoDelay()); 
 	left_cam_subs    = n.subscribe("cam/left"	, 10, left_cam_callback		, ros::TransportHints().tcpNoDelay()); 
 	// ### Add RGBD subscriber
-	
+
 	// Below are the 'debug' outputs. These (in/out)puts are not inevitable 
 	// for the proper execution of the node. However for visualization and
 	// debugging purposes, they provide convenience.
@@ -223,125 +147,45 @@ void setup_messaging_interface(ros::NodeHandle &n)
 	map_pc_publ		= n.advertise<pcl::PointCloud<pcl::PointXYZ> >("debug/pc/map", 10);
 }
 
-void loop(const ros::NodeHandle &n)
+void loop()
 {
-	int map_publ_flag = 0;
 	ros::Rate r(refresh_rate);
+	ros::spin();
+}
 
-	while (n.ok())
-	{
-		r.sleep();
-		ros::spinOnce();
+void iterate_estimator(){
 
-		geometry_msgs::Quaternion odom_quat = odom_msg_in.pose.pose.orientation;
-		geometry_msgs::Quaternion  imu_quat =  imu_msg.orientation;
-		// Check if we got an odometry message. Then assign initial pose for the estimator
-		// as the odometry pose.
-		
-		init_pose = Eigen::Matrix4d::Identity();
-		init_pose(0, 3) = 2;
-		// Check if either odom_msg_in or imu_msg provide orientation information. If none
-		// are available, postpone pose estimation.
-		if(odom_quat.w != 0 || odom_quat.x != 0 || odom_quat.y != 0 || odom_quat.z != 0){
-			quat(0) = odom_quat.w;
-			quat(1) = odom_quat.x;
-			quat(2) = odom_quat.y;
-			quat(3) = odom_quat.z;
-			dcm = utils::quat2dcm(quat);
-			dcm = utils::cancel_yaw(dcm);
-			init_pose.topLeftCorner(3, 3) = dcm;
-			init_pose(0, 3) = odom_msg_in.pose.pose.position.x;
-			init_pose(1, 3) = odom_msg_in.pose.pose.position.y;
-			init_pose(2, 3) = odom_msg_in.pose.pose.position.z;
-		} else if(imu_quat.w != 0 || imu_quat.x != 0 || imu_quat.y != 0 || imu_quat.z != 0){
-			quat(0) = imu_quat.w;
-			quat(1) = imu_quat.x;
-			quat(2) = imu_quat.y;
-			quat(3) = imu_quat.z;
-			dcm = utils::quat2dcm(quat);
-			dcm = utils::cancel_yaw(dcm);
-			init_pose.topLeftCorner(3, 3) = dcm.transpose();
-			init_pose(0, 3) = 10;
-			init_pose(1, 3) = 0;
-			init_pose(2, 3) = 1.5;
+	if(is_bottom_lidar_valid == false || is_top_lidar_valid == false)
+		return;
 
-		} else
-			continue;
-		
-		// Push lidar data 
-		int num_lidar_data = 0;
-    if(top_lidar_msg.ranges.size() * top_lidar_msg.header.stamp.sec * top_lidar_msg.header.stamp.nsec != 0){
-		    tunnel_localizer.push_lidar_data(top_lidar_msg, top_lidar_calib_params, true);
-		    top_lidar_msg.header.stamp.sec = 0;
-		    num_lidar_data++;
-		}
-    if(bot_lidar_msg.ranges.size() * bot_lidar_msg.header.stamp.sec * bot_lidar_msg.header.stamp.nsec != 0){
-    		tunnel_localizer.push_lidar_data(bot_lidar_msg, bottom_lidar_calib_params);
-		    bot_lidar_msg.header.stamp.sec = 0;
-		    num_lidar_data++;
-    }
-    if(right_cam_msg.data.size() * right_cam_msg.header.stamp.sec * right_cam_msg.header.stamp.nsec != 0){
-    		tunnel_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
-    		right_cam_msg.header.stamp.sec = 0;
-    }
-    /*
-    if(top_cam_msg.data.size() * top_cam_msg.header.stamp.sec * top_cam_msg.header.stamp.nsec != 0){
-    		tunnel_localizer.push_camera_data(top_cam_msg  , top_cam_calib_params);
-    		top_cam_msg.header.stamp.sec = 0;
-    }
-    if(bot_cam_msg.data.size() * bot_cam_msg.header.stamp.sec * bot_cam_msg.header.stamp.nsec != 0){
-    		tunnel_localizer.push_camera_data(bot_cam_msg  , bottom_cam_calib_params);
-    		bot_cam_msg.header.sec = 0;
-    }
-    */
-    if(left_cam_msg.data.size() * left_cam_msg.header.stamp.sec * left_cam_msg.header.stamp.nsec != 0){
-    		tunnel_localizer.push_camera_data(left_cam_msg , left_cam_calib_params);
-    		left_cam_msg.header.stamp.sec = 0;
-    }
+	is_top_lidar_valid    = false;
+	is_bottom_lidar_valid = false;
 
-    if(num_lidar_data == 2){
-    		tunnel_localizer.estimate_pose(init_pose);
-    		tunnel_localizer.get_pose(estm_pose);
-    		Eigen::Matrix6d cov;
-    		tunnel_localizer.get_covariance(cov);
-    } else 
-      continue;
-		
-		odom_msg_out.header.seq++;
-		odom_msg_out.header.stamp = ros::Time::now();
-		odom_msg_out.header.frame_id = "map";
-		odom_msg_out.pose.pose.position.x = estm_pose(0, 3) + 2;
-		odom_msg_out.pose.pose.position.y = estm_pose(1, 3);
-		odom_msg_out.pose.pose.position.z = estm_pose(2, 3);
-		dcm  = estm_pose.topLeftCorner(3, 3);
-		quat = utils::dcm2quat(dcm);
-		odom_msg_out.pose.pose.orientation.w = quat(0);
-		odom_msg_out.pose.pose.orientation.x = quat(1);
-		odom_msg_out.pose.pose.orientation.y = quat(2);
-		odom_msg_out.pose.pose.orientation.z = quat(3);
-		odom_publ.publish(odom_msg_out);
+	   top_lidar_proc.transform(Eigen::Matrix4d::Identity(), false);
+	bottom_lidar_proc.transform(Eigen::Matrix4d::Identity(), false);
 
-    publish_res_rays(n);
-		publish_flow_rays(n);
+	tunnel_localizer.push_lidar_data(bottom_lidar_proc, true);
+	tunnel_localizer.push_lidar_data(top_lidar_proc, false);
+     
+	// ### need to set the map somewhere
+	tunnel_localizer.estimate_pose(init_pose);
+	tunnel_localizer.get_pose(estm_pose);
+	tunnel_localizer.get_covariance(estm_cov);
 
-		//cout << "B3" << endl;
-		pcl::PointCloud<pcl::PointXYZ>::Ptr registered_lidar_cloud;
-		tunnel_localizer.get_registered_lidar_cloud(registered_lidar_cloud);
-		registered_lidar_cloud->header.frame_id = "map";
-		registered_lidar_cloud->header.stamp = ros::Time::now().toSec() * 1000;
-		for(int i = 0 ; i < (int)registered_lidar_cloud->points.size() ; i++)
-		  registered_lidar_cloud->points[i].x += odom_msg_out.pose.pose.position.x - 2;
-		laser_pc_publ.publish(*registered_lidar_cloud);
+	publish_odom();
+	publish_res_rays();
+	publish_laser();
 
-		//cout << "B4" << endl;
-		if(--map_publ_flag <= 0){
-			grid_map->header.frame_id = "map";
-			grid_map->header.stamp = ros::Time::now().toSec() * 1000;
-			map_pc_publ.publish(*grid_map);
-			map_publ_flag = 200;
-		}
+	static unsigned seq = 0;
+	if(seq++ % 100 == 0)
+		publish_map();
+}
 
-			}
+void odom_callback(const nav_msgs::Odometry &msg){
+	if(debug_mode)
+		ROS_INFO("TUNNEL LOCALIZER : Got ODOM Data");
+
+	init_pose = utils::trans::odom2se3(msg);
 }
 
 void imu_callback(const sensor_msgs::Imu &msg){
@@ -349,19 +193,58 @@ void imu_callback(const sensor_msgs::Imu &msg){
 		ROS_INFO("TUNNEL LOCALIZER : Got IMU Data");
 
 	imu_msg = msg;
+
+	Eigen::Matrix3d dcm = utils::trans::imu2dcm(imu_msg, true);
+
+	// ### 
+	Eigen::Vector3d rpy = utils::trans::dcm2rpy(dcm);
+	rpy(0) *= -1;
+	dcm = utils::trans::rpy2dcm(rpy);
+
+	init_pose.topLeftCorner<3, 3>() = dcm;
+	init_pose(0, 3) = 1;
+	init_pose(1, 3) = 0;
+	init_pose(2, 3) = 0;
+	init_pose(3, 3) = 1;
 }
 
 void bot_lidar_callback(const sensor_msgs::LaserScan &msg){
 	if(debug_mode)
 		ROS_INFO("TUNNEL LOCALIZER : Got Bottom Lidar Data");
 
-	bot_lidar_msg = msg;
+	bottom_lidar_proc.update_data(msg, bottom_lidar_calib_params);
+
+	bottom_lidar_proc.median_filter(median_filter_window);
+	bottom_lidar_proc.cluster(cluster_min_skips, cluster_range_jump, cluster_min_cluster_size);
+	bottom_lidar_proc.downsample(downsample_thres);
+	bottom_lidar_proc.remove_occlusions(remove_occlusion_thres, remove_occlusion_window);
+	bottom_lidar_proc.rate_linearity(rate_linearity_window);
+	bottom_lidar_proc.linearity_filter(linearity_thres);
+	bottom_lidar_proc.transform(Eigen::Matrix4d::Identity(), true);
+	bottom_lidar_proc.estimate_fim();
+	is_bottom_lidar_valid = true;
+
+	iterate_estimator();
 }
+
 void top_lidar_callback(const sensor_msgs::LaserScan &msg){
 	if(debug_mode)
 		ROS_INFO("TUNNEL LOCALIZER : Got Top Lidar Data");
 
-	top_lidar_msg = msg;
+	top_lidar_proc.update_data(msg, top_lidar_calib_params);
+
+	top_lidar_proc.median_filter(median_filter_window);
+	top_lidar_proc.cluster(cluster_min_skips, cluster_range_jump, cluster_min_cluster_size);
+	top_lidar_proc.downsample(downsample_thres);
+	top_lidar_proc.rate_linearity(rate_linearity_window);
+	top_lidar_proc.linearity_filter(linearity_thres);
+	top_lidar_proc.remove_occlusions(remove_occlusion_thres, remove_occlusion_window);
+	//top_lidar_proc.extract_lines(extract_lines_min_len, extract_lines_min_pts, extract_lines_epsilon);
+	top_lidar_proc.transform(Eigen::Matrix4d::Identity(), true);
+	top_lidar_proc.estimate_fim();
+	is_top_lidar_valid = true;
+
+	iterate_estimator();
 }
 
 void top_cam_callback(const sensor_msgs::Image &msg){
@@ -392,17 +275,29 @@ void left_cam_callback(const sensor_msgs::Image &msg){
 	left_cam_msg = msg;
 }
 
-void odom_callback(const nav_msgs::Odometry &msg){
-	if(debug_mode)
-		ROS_INFO("TUNNEL LOCALIZER : Got Odometry Data");
+void publish_odom(){
+	static int seq = 0;
+	nav_msgs::Odometry odom_msg;
+	odom_msg = utils::trans::se32odom(estm_pose, false, estm_cov);
 
-	odom_msg_in = msg;
+	//cout << "estm_cov = " << estm_cov << endl;
+
+	odom_msg.pose.pose.position.x = 1;
+
+	odom_msg.header.seq = seq++;
+	odom_msg.header.frame_id = "map";
+	odom_msg.header.stamp = ros::Time::now();
+
+	// ### add covariance to the message
+
+	odom_publ.publish(odom_msg);
 }
 
 // This function visualizes the residual vectors after ICP.
 // Hence it gives an idea on how well the RangeBasedTunnelLocalizer
 // performs.
-void publish_res_rays(const ros::NodeHandle &n){
+void publish_res_rays(){
+	
 	vector<pcl::PointXYZ> range, map;
 	tunnel_localizer.get_range_map_correspondences(range, map);
 
@@ -413,7 +308,7 @@ void publish_res_rays(const ros::NodeHandle &n){
 	res_rays_msg.id = 0;
 	res_rays_msg.type = visualization_msgs::Marker::LINE_LIST;
 	res_rays_msg.action = visualization_msgs::Marker::ADD;
-	res_rays_msg.pose.position.x = odom_msg_out.pose.pose.position.x - 2;
+	res_rays_msg.pose.position.x = odom_msg_out.pose.pose.position.x;
 	res_rays_msg.pose.position.y = 0;
 	res_rays_msg.pose.position.z = 0;
 	res_rays_msg.pose.orientation.x = 0.0;
@@ -444,7 +339,8 @@ void publish_res_rays(const ros::NodeHandle &n){
 }
 
 
-void publish_flow_rays(const ros::NodeHandle &n){
+void publish_flow_rays(){
+	/*
 	vector<pcl::PointXYZ> tails, pits;
 	tunnel_localizer.get_back_projected_features(tails, tips);
 
@@ -488,6 +384,34 @@ void publish_flow_rays(const ros::NodeHandle &n){
 		flow_rays_msg.points[3*i+2].z = tips[i].z;
 	}
 	flow_rays_publ.publish(flow_rays_msg);
+	*/
+}
 
+void publish_map(){
 
+	grid_map->header.frame_id = "world";
+	grid_map->height = 1;
+	grid_map->width = grid_map->points.size();
+
+    grid_map->header.stamp = ros::Time::now().toNSec();
+    map_pc_publ.publish (grid_map);
+}
+
+void publish_laser(){
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr laser_pc;
+	tunnel_localizer.get_registered_lidar_cloud(laser_pc);
+
+	laser_pc->header.frame_id = "world";
+	laser_pc->height = 1;
+	laser_pc->width = laser_pc->points.size();
+
+    laser_pc->header.stamp = ros::Time::now().toNSec();
+    laser_pc_publ.publish(laser_pc);
+
+	/*
+	static visualization_msgs::MarkerArray top_marray, bottom_marray;
+	bottom_laser_proc.get_RVIZ_markers(bottom_marray);
+	   top_laser_proc.get_RVIZ_markers(   top_marray);
+	*/
 }

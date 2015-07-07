@@ -1,0 +1,87 @@
+<!-- 
+Example launch file: launches the scan matcher with pre-recorded data
+-->
+
+<launch>
+
+<param name = "use_sim_time" value = "true" />
+
+#### Playback ROSBAG  ##############################
+
+
+<!--
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex/1.bag" />
+<arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
+-->
+<!--
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/6April/state_farm02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/compare_imu_vicon/khex01.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl06_handheld.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl06_handheld.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine03_run.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine02.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/6April/state_farm01.bag" />
+-->
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl03.bag" />
+<node	pkg ="rosbag"
+		name  ="rosbag"
+		type  ="play"
+    output="screen"
+    args  ="--loop --rate=1.0 $(arg bagfile_path) --start=0 --duration=10000 --clock ">
+    <remap from="raw_imu" to="/khex/imu" />
+</node>
+
+#### start the Laser Processors  ##############################
+
+<node	pkg  = "two_lidars_odom" 
+		name   = "two_lidars_odom" 
+		type   = "two_lidars_odom_node" 
+		output = "screen">
+		
+		<remap from="~imu"			to="/khex/imu"/>
+		<remap from="~scan/top"		to="/scan/top"/>
+		<remap from="~scan/bottom"  to="/scan/bottom"/>
+
+		<param name="debug_mode"	value="TRUE"/>
+		<param name="refresh_rate"	value="40.0"/>	
+	    <rosparam file="$(find two_lidars_odom)/config/laser_proc.yaml" command="load" />
+		<param name="top_lidar_calib_file"		  value="$(find calib_data)/lidar/roof_ins_khex_top_lidar.yaml"/>
+		<param name="bottom_lidar_calib_file"	  value="$(find calib_data)/lidar/roof_ins_khex_bottom_lidar.yaml"/>
+</node> 
+
+#### start RVIZ Visualization ##############################
+
+<node	pkg="rviz"
+		name="rviz"
+		type="rviz"
+		output="screen"
+    args  ="-d $(find two_lidars_odom)/rviz/two_lidars_odom01.rviz">
+		<param name="fixed-frame"	 value="world"/>
+</node>
+
+<node pkg="tf" type="static_transform_publisher" name="laser_link" args="0 0 0 0 0 0 /world /laser 100"/>
+
+<node pkg="tf" type="static_transform_publisher" name="body_link" args="0 0 0 0 0 0 /world /body 100"/>
+<!--
+<node pkg="tf" type="static_transform_publisher" name="vicon_link" args="-1.53 0.65 0 -2.16 0 0 /vicon /world 100"/>
+-->
+
+<node pkg="tf" type="static_transform_publisher" name="vicon_link" args="-1.50 0.65 0.28 -0.44 0 0 /vicon /world 100"/>
+</launch>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

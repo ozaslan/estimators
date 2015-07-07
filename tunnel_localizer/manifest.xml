@@ -14,6 +14,7 @@
 	<depend package="roscpp"/>
 	<depend package="pcl_ros"/>
 	<depend package="nav_msgs"/>
+	<depend package="laser_proc"/>
 	<depend package="sensor_msgs"/>
 	<depend package="pcl_conversions"/>
 	<depend package="visualization_msgs"/>

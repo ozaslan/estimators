@@ -22,6 +22,7 @@
 #include <pcl/registration/icp.h>
 
 #include <calib_params.hh>
+#include <laser_proc.hh>
 #include "range_based_tunnel_localizer.hh"
 #include "vision_based_tunnel_localizer.hh"
 
@@ -31,7 +32,7 @@ class TunnelLocalizer{
     RangeBasedTunnelLocalizer _rbtl;
     VisionBasedTunnelLocalizer _vbtl;
     vector<cv::Mat> _frames;
-    vector<CameraCalibParams>		_cam_params;
+    vector<CameraCalibParams> _cam_params;
     double _x_disp, _x_pos;
 
     vector<bool> _camera_data_available;
@@ -46,6 +47,9 @@ class TunnelLocalizer{
     bool push_lidar_data (const sensor_msgs::LaserScan &scan  , const LidarCalibParams  &params, bool clean_start = false);
     bool push_rgbd_data  (const sensor_msgs::PointCloud2 &rdgb, const RGBDCalibParams   &params, bool clean_start = false);
     bool push_camera_data(const sensor_msgs::Image &frame	  , const CameraCalibParams &params);
+    // The same as the above 'push_lidar_data(...)' function but accepts 'LaserProc' class instead of 
+	// separate laser scan and lidar paramters.
+	bool push_lidar_data (const LaserProc &laser_proc, bool clean_start = false);
     // This function calls RangeBasedTunnelLocalizer's and VisionBasedTunnelLocalizer's
     // estimators. Depending on the choice of parameters (### to beimplemented) either
     // a ranges-major, vision-aided estimator or a sensor-fusion-based estimator scheme

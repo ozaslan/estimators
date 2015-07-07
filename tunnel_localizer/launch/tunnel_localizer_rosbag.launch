@@ -8,18 +8,18 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 
 <!--
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex/1.bag" />
-<arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
--->
-
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/carters_gazebo/1.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/carters_penstock.pcd" />
+-->
+
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex_statefarm/1.bag" />
+<arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
 
 <node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --quiet ">
+    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --quiet --delay=1">
     <remap from="raw_imu" to="/khex/imu" />
 </node>
 
@@ -57,32 +57,37 @@ Example launch file: launches the scan matcher with pre-recorded data
 	  output="screen">
       <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
       <remap from="~imu" to="/khex/imu"/> 
-      <remap from="~odom_slam" to="/tunnel_estimator/odom"/>
+      <remap from="~odom_slam" to="/tunnel_localizer/odom_out"/>
 </node> 
 
 #### start RVIZ Visualization ##############################
 
 <node	pkg ="odom_visualization"
 		name="meas_odom_visualization"
-		type="odom_visualization"
+		type="odom_visualization_node"
 		output="screen">
-		<remap from="~odom" to="/tunnel_localizer/odom"/>
+		<remap from="~odom" to="/tunnel_localizer/odom_out"/>
+	    <rosparam file="$(find odom_visualization)/config/config01.yaml" />
 </node>
 
 <node	pkg ="odom_visualization"
 		name="ukf_odom_visualization"
-		type="odom_visualization"
+		type="odom_visualization_node"
 		output="screen">
-		<remap from="~odom" to="/quadrotor_ukf/odom"/>
+		<remap from="~odom" to="/control_odom"/>
+	    <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+
 </node>
 
 <node	pkg="rviz"
 		name="rviz"
 		type="rviz"
-		output="screen">
-		<param name="display-config" value="tunnel_localizer.rviz"/>
+		output="screen"
+		args  ="-d $(find tunnel_localizer)/rviz/tunnel_localizer01.rviz">
 		<param name="fixed-frame"	 value="world"/>
 </node>
+
+<node pkg="tf" type="static_transform_publisher" name="world_to_map" args="0 0 0 0 0 0 /map /world 100"/>
 
 </launch>
 

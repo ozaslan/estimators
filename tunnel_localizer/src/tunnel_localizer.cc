@@ -2,6 +2,46 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
+bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_start){
+	// 'push_lidar_data(...)' is responsible for checking a clean
+	// start is required or not. It searches for all of the previously 
+	// pushed lidar data to see if the current data is from a previously 
+	// pushed lidar data. If yes, and also if the time stamp is new,
+	// a clean start is made. If the stamp is the same too, return 'false'.
+	// If the source is completely different from the provious sources,
+	// then push the data.
+	const LidarCalibParams& params = laser_proc.get_calib_params();
+	ros::Time stamp = laser_proc.get_timestamp();
+	for(int i = 0 ; i < (int)_lidar_ids.size() ; i++ ){
+		if(_lidar_ids[i] == params.unique_id){
+			_lidar_data_available[i] = true;
+			if(_lidar_stamps[i].first  == stamp.sec &&
+					_lidar_stamps[i].second == stamp.nsec)
+				return false;
+			else {
+				clean_start = true;
+				break;
+
+			}
+		}
+	}
+
+	if(clean_start == true){
+		_lidar_ids.clear();
+		_lidar_stamps.clear();
+		_lidar_data_available.clear();
+	}
+
+	_lidar_ids.push_back(params.unique_id);
+	_lidar_stamps.push_back(std::make_pair<double, double>(
+				stamp.sec, stamp.nsec));
+	_lidar_data_available.push_back(true);
+
+	_rbtl.push_laser_data(laser_proc, clean_start);
+
+	return true;
+}
+
 bool TunnelLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const LidarCalibParams  &params, bool clean_start){
 	// 'push_lidar_data(...)' is responsible for checking a clean
 	// start is required or not. It searches for all of the previously 
@@ -14,7 +54,7 @@ bool TunnelLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const 
 		if(_lidar_ids[i] == params.unique_id){
 			_lidar_data_available[i] = true;
 			if(_lidar_stamps[i].first  == data.header.stamp.sec &&
-			   _lidar_stamps[i].second == data.header.stamp.nsec)
+					_lidar_stamps[i].second == data.header.stamp.nsec)
 				return false;
 			else {
 				clean_start = true;
@@ -57,7 +97,7 @@ bool TunnelLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const 
 	}
 
 	// Use utils to cluster scan	
-	utils::cluster_laser_scan(data, mask, num_clusters, params.min_range, params.max_range);
+	utils::laser::cluster_laser_scan(data, mask, num_clusters, params.min_range, params.max_range);
 	// ### (to be done) manually assign new clusters to upward and downward rays
 
 	for(int i = 1 ; i <= num_clusters ; i++)
@@ -151,7 +191,7 @@ bool TunnelLocalizer::push_camera_data(const sensor_msgs::Image &data, const Cam
 		_vbtl.push_camera_data(_frames, pose);
 		// Invalidate all the camera data.
 		std::fill(_camera_data_available.begin(), 
-				  _camera_data_available.end(), false);
+				_camera_data_available.end(), false);
 
 		return true;
 	}
@@ -163,9 +203,9 @@ bool TunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 	_rbtl.estimate_pose(init_pose);
 
 	// ### didn't like this
-	_vbtl.estimate_displacement(_x_disp);
-	_x_pos += _x_disp;
-	cout << "_x_disp = " << _x_disp << endl;
+	//_vbtl.estimate_displacement(_x_disp);
+	//_x_pos += _x_disp;
+	//cout << "_x_disp = " << _x_disp << endl;
 
 	return true;
 }
@@ -197,7 +237,7 @@ bool TunnelLocalizer::get_pose(Eigen::Matrix4d &pose){
 }
 
 bool TunnelLocalizer::get_covariance(Eigen::Matrix6d &cov){
-	_rbtl.get_covariance(cov);
+	_rbtl.get_covariance(cov, false);
 	// ### from VisionBasedTunnelLocalizer too?
 	return true;
 }

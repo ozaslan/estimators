@@ -143,7 +143,8 @@ class VisionBasedTunnelLocalizer{
 		// UniformFeatureTracker's detailed  trailer is used. Otherwise lenght-1 trailers
 		// are plotted. This function also assumes that the 'img' vector is of same 
 		// size with 'CameraCalibParams'. Otherwise it returns 'false' without any plots.
-		bool plot_flows(vector<cv::Mat> &img, bool plot_details = false, bool plot_flow = true, bool plot_feats = true);
+		bool plot_flows(vector<cv::Mat> &img, bool plot_flow, bool plot_feat); //###
+		bool plot_flows(vector<cv::Mat> &img, bool plot_details = false, bool plot_flow = true, bool plot_feats = true){return true; /*###*/}
 };
 
 
