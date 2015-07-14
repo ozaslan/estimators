@@ -18,3 +18,9 @@ Use triangle list to visualize area spanned by the optical flow vector, back-pro
 robot center.
 
 -- Incorporate the image masking into tracker and extractor
+
+
+---- 13 Jul 2015
+
+-- 03.bag fails when the robot yaws significantly. The solution is to give a good prior
+-- 01.bag : UKF does not match with the measurement odom. Velocity shoots the estimation 10-20 cm off continuously.

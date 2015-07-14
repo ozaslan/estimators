@@ -67,8 +67,9 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const LaserProc &laser_proc, boo
 
 	//cout << "dcm = [" << dcm << "];" << endl;
 
+	// Here we use the ypr convention for compatibility with the 'quadrotor_ukf_lite' node.
 	_fim.block<3, 3>(0, 0) += fim_xyz;
-	_fim(5, 5) += fi_p;
+	_fim(3, 3) += fi_p;
 
 	//cout << "_fim = [" << _fim << "];" << endl;
 
@@ -115,8 +116,9 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 
 	fi_p = fim_xyp(2, 2) * dcm(2, 2);
 
+	// Here we use the ypr convention for compatibility with the 'quadrotor_ukf_lite' node.
 	_fim.block<3, 3>(0, 0) += fim_xyz;
-	_fim(5, 5) += fi_p;
+	_fim(3, 3) += fi_p;
 
 	_num_laser_pushes++;
 
@@ -319,6 +321,7 @@ bool RangeBasedTunnelLocalizer::get_covariance(Eigen::Matrix6d &cov, bool apply_
 
 	for(int i = 0 ; i < 6 ; i++)
 		D(i, i) = 1 / D(i, i) + 0.00001;
+
 	cov = (V * D * V.transpose());
 
 	//cout << "V = [" << V << "];" << endl;
@@ -328,6 +331,15 @@ bool RangeBasedTunnelLocalizer::get_covariance(Eigen::Matrix6d &cov, bool apply_
 	cov.topLeftCorner<3, 3>	() = _pose.topLeftCorner<3, 3>().transpose() * 
 									cov.topLeftCorner<3, 3>() * 
 								 _pose.topLeftCorner<3, 3>();
+
+	// Exclude the pose estimate along the x direction.
+	es.compute(cov, true);
+	D = es.eigenvalues().real().asDiagonal();
+	V = es.eigenvectors().real();
+	D(0, 0) = 0.00001;
+	D(4, 4) = 0.00009;
+	D(5, 5) = 0.00009;
+	cov = (V * D * V.transpose());
 
 	return true;
 }

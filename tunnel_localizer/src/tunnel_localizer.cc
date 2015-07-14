@@ -21,7 +21,6 @@ bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_st
 			else {
 				clean_start = true;
 				break;
-
 			}
 		}
 	}
@@ -34,7 +33,7 @@ bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_st
 
 	_lidar_ids.push_back(params.unique_id);
 	_lidar_stamps.push_back(std::make_pair<double, double>(
-				stamp.sec, stamp.nsec));
+       			stamp.sec, stamp.nsec));
 	_lidar_data_available.push_back(true);
 
 	_rbtl.push_laser_data(laser_proc, clean_start);

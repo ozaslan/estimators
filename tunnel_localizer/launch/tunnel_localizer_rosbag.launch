@@ -10,17 +10,20 @@ Example launch file: launches the scan matcher with pre-recorded data
 <!--
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/carters_gazebo/1.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/carters_penstock.pcd" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex_statefarm/1.bag" />
 -->
 
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex_statefarm/1.bag" />
+# 3 needs work
+
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne06.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
 
 <node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --quiet --delay=1">
-    <remap from="raw_imu" to="/khex/imu" />
+    args  ="--loop --rate=.51 $(arg bagfile_path) --start=0 --duration=9999 --delay=1">
+    <remap from="/khex_com/imu" to="/khex/imu" />
 </node>
 
 #### start the Tunnel Localizer ##############################
@@ -29,8 +32,9 @@ Example launch file: launches the scan matcher with pre-recorded data
 		name   = "tunnel_localizer" 
 		type   = "tunnel_localizer" 
 		output = "screen">
-		
+
 		<remap from="~imu"			to="/khex/imu"/>
+		<remap from="~odom_in"			to="/control_odom"/>
 		<remap from="~scan/top"		to="/scan/top"/>
 		<remap from="~scan/bottom"	to="/scan/bottom"/>
 		<remap from="~cam/top"		to="/cam1/image"/>

@@ -185,7 +185,19 @@ void odom_callback(const nav_msgs::Odometry &msg){
 	if(debug_mode)
 		ROS_INFO("TUNNEL LOCALIZER : Got ODOM Data");
 
-	init_pose = utils::trans::odom2se3(msg);
+	Eigen::Matrix3d dcm = utils::trans::odom2se3(msg).topLeftCorner<3, 3>(); 
+	double y = utils::trans::dcm2rpy(dcm)(2);
+
+	dcm = init_pose.topLeftCorner<3, 3>();
+	Eigen::Vector3d rpy = utils::trans::dcm2rpy(dcm);
+	rpy(2) = y;
+	cout << "yaw = " << y << endl;
+
+	init_pose.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy);
+
+	init_pose(0, 3) = 3;
+
+	cout << "init_pose = " << init_pose << endl;
 }
 
 void imu_callback(const sensor_msgs::Imu &msg){
@@ -194,15 +206,16 @@ void imu_callback(const sensor_msgs::Imu &msg){
 
 	imu_msg = msg;
 
-	Eigen::Matrix3d dcm = utils::trans::imu2dcm(imu_msg, true);
-
-	// ### 
+	Eigen::Matrix3d	dcm = init_pose.topLeftCorner<3, 3>();
 	Eigen::Vector3d rpy = utils::trans::dcm2rpy(dcm);
-	rpy(0) *= -1;
+	double y = rpy(2);
+	dcm = utils::trans::imu2dcm(imu_msg, true);
+	rpy = utils::trans::dcm2rpy(dcm);
+	rpy(2) = y;
 	dcm = utils::trans::rpy2dcm(rpy);
 
 	init_pose.topLeftCorner<3, 3>() = dcm;
-	init_pose(0, 3) = 1;
+	init_pose(0, 3) = 3;
 	init_pose(1, 3) = 0;
 	init_pose(2, 3) = 0;
 	init_pose(3, 3) = 1;
@@ -280,9 +293,16 @@ void publish_odom(){
 	nav_msgs::Odometry odom_msg;
 	odom_msg = utils::trans::se32odom(estm_pose, false, estm_cov);
 
-	//cout << "estm_cov = " << estm_cov << endl;
+	for(int r = 0 ; r < 4 ; r++){
+		for(int c = 0 ; c < 4 ; c++){
+			if( estm_pose(r, c) != estm_pose(r, c) )
+				return;
+		}
+	}
 
-	odom_msg.pose.pose.position.x = 1;
+	cout << "estm_pose = " << estm_pose << endl;
+
+	odom_msg.pose.pose.position.x = 3;
 
 	odom_msg.header.seq = seq++;
 	odom_msg.header.frame_id = "map";
