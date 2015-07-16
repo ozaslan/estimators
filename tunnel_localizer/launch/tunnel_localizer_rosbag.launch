@@ -15,14 +15,14 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 # 3 needs work
 
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne01.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne05.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
 
 <node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --delay=0 --quiet">
+    args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --delay=.5 --quiet ">
     <remap from="/khex_com/imu" to="/khex/imu" />
     <!--
     <remap from="/cam0/image/compressed" to="/cam2/image" />

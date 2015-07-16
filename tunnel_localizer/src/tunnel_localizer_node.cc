@@ -26,7 +26,7 @@ void process_inputs(const ros::NodeHandle &n)
          bottom_lidar_calib_file,
          map_path;
 
-  n.param("refresh_rate", refresh_rate, 100.0);
+  n.param("refresh_rate", refresh_rate, 40.0);
   n.param("debug_mode", debug_mode, false);
 
   n.param("top_lidar_calib_file"		, top_lidar_calib_file	    , string("ERROR"));
@@ -162,7 +162,7 @@ void iterate_estimator(){
     return;
 
   if(is_right_cam_valid == true){
-    //tunnel_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
+    tunnel_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
     is_right_cam_valid = false;
   }
 

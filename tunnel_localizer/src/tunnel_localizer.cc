@@ -2,7 +2,12 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 
-#define debug_msg {cout << "File : " << __FILE__ << " Line # : " << __LINE__ << " Func : " << __func__ << endl;}
+#define DEBUG 0
+#if DEBUG == 1
+#define DEBUG_MSG PRINT_FLF
+#else
+#define DEBUG_MSG 
+#endif
 
 bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_start){
 	// 'push_lidar_data(...)' is responsible for checking a clean
@@ -12,7 +17,7 @@ bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_st
 	// a clean start is made. If the stamp is the same too, return 'false'.
 	// If the source is completely different from the provious sources,
 	// then push the data.
-	debug_msg 
+	DEBUG_MSG; 
 	const LidarCalibParams& params = laser_proc.get_calib_params();
 	ros::Time stamp = laser_proc.get_timestamp();
 	for(int i = 0 ; i < (int)_lidar_ids.size() ; i++ ){
@@ -36,12 +41,12 @@ bool TunnelLocalizer::push_lidar_data(const LaserProc &laser_proc, bool clean_st
 
 	_lidar_ids.push_back(params.unique_id);
 	_lidar_stamps.push_back(std::make_pair<double, double>(
-       			stamp.sec, stamp.nsec));
+				stamp.sec, stamp.nsec));
 	_lidar_data_available.push_back(true);
 
 	_rbtl.push_laser_data(laser_proc, clean_start);
 
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
 
@@ -53,7 +58,7 @@ bool TunnelLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const 
 	// a clean start is made. If the stamp is the same too, return 'false'.
 	// If the source is completely different from the provious sources,
 	// then push the data.
-	debug_msg 
+	DEBUG_MSG;
 	for(int i = 0 ; i < (int)_lidar_ids.size() ; i++ ){
 		if(_lidar_ids[i] == params.unique_id){
 			_lidar_data_available[i] = true;
@@ -110,7 +115,7 @@ bool TunnelLocalizer::push_lidar_data(const sensor_msgs::LaserScan &data, const 
 	// ### update relative pose for upwards and downwards rays. 
 	// push_laser_data(...)
 
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
 
@@ -143,8 +148,7 @@ bool TunnelLocalizer::push_camera_data(const sensor_msgs::Image &data, const Cam
 
 	//cout << "data.[width, height] = [" << data.width << ", " << data.height << "]" << endl;
 
-	debug_msg 
-	cout << "W1" << endl;
+	DEBUG_MSG;
 	bool is_new_camera = true;
 	cv_bridge::CvImagePtr image_msg;
 	for(int i = 0 ; i < (int)_camera_ids.size() ; i++ ){
@@ -167,8 +171,6 @@ bool TunnelLocalizer::push_camera_data(const sensor_msgs::Image &data, const Cam
 		}
 	}
 
-	cout << "W2" << endl;
-
 	if(is_new_camera == true){
 		_camera_ids.push_back(params.unique_id);
 		_camera_stamps.push_back(std::make_pair<double, double>(
@@ -185,42 +187,49 @@ bool TunnelLocalizer::push_camera_data(const sensor_msgs::Image &data, const Cam
 		_vbtl.register_camera_params(_cam_params);
 	}
 
-	cout << "W3" << endl;
 	bool all_frames_present = true;
-	for(int i = 0 ; i < (int)_camera_data_available.size() ; i++){
+	for(int i = 0 ; i < (int)_camera_data_available.size() ; i++)
 		all_frames_present = all_frames_present && _camera_data_available[i];
-		cout << "_camera_data_available[" << i << "] = " << _camera_data_available[i] << endl;
-	}
-
-	cout << "all_frames_present = " << all_frames_present << endl;
-
-	cout << "W4" << endl;
 
 	if(all_frames_present == false)
 		return false;
 	else {
-		cout << "W5" << endl;
 		Eigen::Matrix4d pose;
 		_rbtl.get_pose(pose);
-		cout << "W6" << endl;
-		cout << "_frames.size() = " << _frames.size() << endl;
 		_vbtl.push_camera_data(_frames, pose);
-		cout << "W7" << endl;
 		// Invalidate all the camera data.
 		std::fill(_camera_data_available.begin(), 
 				_camera_data_available.end(), false);
 		return true;
 	}
-	debug_msg 
+	DEBUG_MSG;
 }
 
 bool TunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
-	debug_msg 
+	DEBUG_MSG;
 	// ### I have to have options for particle filter,
 	// freedoms to update, initial pose etc...
 	_rbtl.estimate_pose(init_pose);
-	//###_vbtl.estimate_displacement(_x_disp);
-	debug_msg 
+	_vbtl.estimate_displacement(_x_disp);
+	/*
+	bool all_frames_present = true;
+	for(int i = 0 ; i < (int)_camera_data_available.size() ; i++)
+		all_frames_present = all_frames_present && _camera_data_available[i];
+
+	if(all_frames_present == false){
+
+	} else {
+		Eigen::Matrix4d pose;
+		_rbtl.get_pose(pose);
+		_vbtl.push_camera_data(_frames, pose);
+
+		_vbtl.estimate_displacement(_x_disp);
+		// Invalidate all the camera data.
+		std::fill(_camera_data_available.begin(), 
+				_camera_data_available.end(), false);
+	}
+	*/
+	DEBUG_MSG;
 	return true;
 }
 
@@ -231,69 +240,68 @@ bool TunnelLocalizer::reset(){
 }
 
 bool TunnelLocalizer::set_map(const pcl::PointCloud<pcl::PointXYZ>::Ptr &grid_map){
-	debug_msg 
+	DEBUG_MSG;
 	_map = grid_map;
 	_rbtl.set_map(_map);
 	_vbtl.set_map(_map);
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
 
 bool TunnelLocalizer::get_pose(Eigen::Matrix4d &pose){
-	debug_msg 
+	DEBUG_MSG;
 	_rbtl.get_pose(pose);
 
 	double x_disp;
 	_vbtl.get_displacement(x_disp);
-	cout << "x_disp = " << x_disp << endl;
 	pose(0, 3) += x_disp;
-	debug_msg 
+	//cout << "pose = " << pose << endl;
+	DEBUG_MSG;
 	return true;
 }
 
 bool TunnelLocalizer::get_covariance(Eigen::Matrix6d &cov){
-	debug_msg 
+	DEBUG_MSG;
 	_rbtl.get_covariance(cov, false);
 	double x_var;
 	_vbtl.get_variance(x_var);
 	//cov(0, 0) += x_var;
 	// ### from VisionBasedTunnelLocalizer too?
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
 
 
 bool TunnelLocalizer::get_registered_lidar_cloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud ){
-	debug_msg 
+	DEBUG_MSG; 
 	_rbtl.get_registered_pointcloud(cloud);
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
 
 bool TunnelLocalizer::get_range_map_correspondences(vector<pcl::PointXYZ> &range_pts, vector<pcl::PointXYZ> &map_pts){
-	debug_msg 
+	DEBUG_MSG;
 	return _rbtl.get_correspondences(range_pts, map_pts);
 }
 
 bool TunnelLocalizer::get_back_projected_features(vector<pcl::PointXYZ> &tails, vector<pcl::PointXYZ> &tips){
-	debug_msg 
+	DEBUG_MSG;
 	_vbtl.get_back_projected_flow_vectors(tails, tips);
-	debug_msg 
+	DEBUG_MSG; 
 	return true;
 }
 
 bool TunnelLocalizer::plot_tracked_features(vector<cv::Mat> &images, bool plot_flow, bool plot_feats){
-	debug_msg 
-	if(_frames[0].rows * _frames[0].cols == 0){
-		//cout << "returning false"  << endl << endl;
-		//return false;
+	DEBUG_MSG;
+	if(_frames.size() == 0 || _frames[0].rows * _frames[0].cols == 0){
+		DEBUG_MSG;
+		return false;
 	}
-	/* ###
+
 	_vbtl.plot_flows(_frames, plot_flow, plot_feats);
 	images.resize(_frames.size());
 	for(int i = 0 ; i < (int)_frames.size() ; i++)
 		images[i] = _frames[i];
-	*/
-	debug_msg 
+	DEBUG_MSG;
 	return true;
 }
