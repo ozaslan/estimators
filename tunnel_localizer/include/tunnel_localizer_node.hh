@@ -74,13 +74,13 @@ sensor_msgs::LaserScan bot_lidar_msg, top_lidar_msg;
 sensor_msgs::Image	top_cam_msg, bot_cam_msg, 
 	right_cam_msg, left_cam_msg;
 sensor_msgs::Imu imu_msg;
-nav_msgs::Odometry odom_msg_in, odom_msg_out;
 visualization_msgs::Marker res_rays_msg, flow_rays_msg;
 
 // -------------- CLASS DECLERATIONS ---------------------------------------------------------- //
 // * LaserProc etc.
 LaserProc top_lidar_proc, bottom_lidar_proc;
 bool is_top_lidar_valid, is_bottom_lidar_valid;
+bool is_right_cam_valid, is_left_cam_valid;
 // * Calibration data is given as an argument together with
 //   the corresponding sensor data.
 CameraCalibParams top_cam_calib_params;

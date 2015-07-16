@@ -78,7 +78,7 @@ class TunnelLocalizer{
 
     bool get_range_map_correspondences(vector<pcl::PointXYZ> &range_pts, vector<pcl::PointXYZ> &map_pts);
 
-    bool plot_tracked_features(cv::Mat &image, bool plot_flow = true, bool plot_feats = true);
+    bool plot_tracked_features(vector<cv::Mat> &images, bool plot_flow = true, bool plot_feats = true);
 
     bool get_back_projected_features(vector<pcl::PointXYZ> &tails, vector<pcl::PointXYZ> &tips);
 

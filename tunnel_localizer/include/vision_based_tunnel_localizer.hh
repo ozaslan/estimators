@@ -53,7 +53,7 @@ class VisionBasedTunnelLocalizer{
 		int _num_frames_pushed;	// counts the number of calls to 'push_image_data(...)' after the last 'estimate_displacement(...)' function call.
 
 		// These vectors are filled by UniformFeatureTracker::get_features(...). Since that function
-		// allocated memory, frequent calls should be avoided. 'Tip' of the flow vector
+		// allocates memory, frequent calls should be avoided. 'Tip' of the flow vector
 		// becomes the 'tail' in the next 'estimate_displacement(...)' call. For this reason
 		// flow tips and tails are stored in a cyclic buffer.
 		int _feat_buffer_idx;						// defines the buffer to be used in the current estimation step.
@@ -88,7 +88,7 @@ class VisionBasedTunnelLocalizer{
 				string detector_type = string("FAST"), 
 				double threshold = 9);
 		// This function calculates the displacement along the tunnel axis (world-x dir.) by 
-		// utilizing the vector of frames. At every call image features are extracted and
+		// utilizing the set of frames. At every call image features are extracted and
 		// tracked from the previous frame. The user might want to estimate the displacement
 		// after each frame vector insertion or wait indefinitely. However long intervals
 		// may cause losing track of most of the features. This function incorporates 
@@ -97,12 +97,12 @@ class VisionBasedTunnelLocalizer{
 		// position w.r.t. the platform is already given through 'register_params(...)'. 
 		// Otherwise the function will raise an exception. And the order of the frames is 
 		// assumed to be given in the same order at every call. This implicitly assumes 
-		// that each frame maps to the same parameter throughout lifetime of the class or 
+		// that each frame maps to the same parameter throughout the lifetime of the class or 
 		// until another parameter set is registered.
 		bool push_camera_data(const vector<cv::Mat> &frames, const Eigen::Matrix4d &pose);
 		// This function registers camera calibration parameters. Everytime a new parameter
 		// set is registered, '_reset(...)' is called internally. The order of the frames supplied
-		// to 'push_image_data(...)' and 'params' is assumed to the same throughout the lifetime
+		// to 'push_image_data(...)' and 'params' is assumed to be the same throughout the lifetime
 		// of the object. Estimation and data pushing will not work unless proper number
 		// of camera calibration parameters are give ahead of time. 
 		bool register_camera_params(const vector<CameraCalibParams> &params);
@@ -115,13 +115,14 @@ class VisionBasedTunnelLocalizer{
 		// This function gets the optical flow trailers, does ray-casting and geometrically 
 		// estimates the displacement along the tunnel axis (world-x dir.).
 		bool estimate_displacement(double &x_disp);
-		// This function assumes that 'estimate_displacement(...)' function 
-		// is called beforehand. When properly called, it returns the displacement
+		// These functions assume that 'estimate_displacement(...)' function 
+		// is called beforehand. When properly called, they return the displacement and the variance
 		// along the tunnel axis (world-x dir.). Otherwise last displacement obtained at the most 
 		// recent estimate is returned. The output of this function includes only 
 		// the x-displacement and it is users responsibility to merge
 		// with RangeBasedTunnelLocalizer's estimate.
 		bool get_displacement(double &x_disp);
+		bool get_variance(double &x_var);
 		// This function gives the optical flow vectors back-projected to the
 		// map. It uses the results of the 'estimate_displacement(...)' function. 
 		// Hence it assumes that the estimator function has been already called. 
@@ -144,7 +145,6 @@ class VisionBasedTunnelLocalizer{
 		// are plotted. This function also assumes that the 'img' vector is of same 
 		// size with 'CameraCalibParams'. Otherwise it returns 'false' without any plots.
 		bool plot_flows(vector<cv::Mat> &img, bool plot_flow, bool plot_feat); //###
-		bool plot_flows(vector<cv::Mat> &img, bool plot_details = false, bool plot_flow = true, bool plot_feats = true){return true; /*###*/}
 };
 
 
