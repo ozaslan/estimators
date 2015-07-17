@@ -162,7 +162,7 @@ void iterate_estimator(){
     return;
 
   if(is_right_cam_valid == true){
-    tunnel_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
+    //tunnel_localizer.push_camera_data(right_cam_msg, right_cam_calib_params);
     is_right_cam_valid = false;
   }
 
@@ -453,7 +453,7 @@ void publish_map(){
   grid_map->height = 1;
   grid_map->width = grid_map->points.size();
 
-  grid_map->header.stamp = ros::Time::now().toNSec();
+  grid_map->header.stamp = ros::Time::now().toSec();
   map_pc_publ.publish (grid_map);
 }
 
@@ -466,7 +466,7 @@ void publish_laser(){
   laser_pc->height = 1;
   laser_pc->width = laser_pc->points.size();
 
-  laser_pc->header.stamp = ros::Time::now().toNSec();
+  laser_pc->header.stamp = ros::Time::now().toSec();
   laser_pc_publ.publish(laser_pc);
 
   /*

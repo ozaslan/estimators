@@ -1,0 +1,105 @@
+<launch>
+
+<arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
+
+<include file="$(find khex_com)/launch/khex_com.launch" />
+<include file="$(find rc_nav)/launch/rc_nav.launch" />
+<include file="$(find bluefox_node)/launch/run_four_cams.launch" />
+
+#### start the urg nodes  ##############################
+
+<node pkg   ="urg_node"
+      name  ="bottom_laser"
+      type  ="urg_node"
+      output="screen">   
+  	  <param name="ip_address"   value="192.168.1.11" />
+	  <remap from="/scan" to="/scan/bottom"/>
+</node>
+
+<node pkg   ="urg_node"
+      name  ="top_laser"
+      type  ="urg_node"
+      output="screen">   
+  	  <param name="ip_address"   value="192.168.0.11" />
+	  <remap from="/scan" to="/scan/top"/>
+</node>
+
+#### start the Tunnel Localizer ##############################
+
+<node	pkg    = "tunnel_localizer" 
+		name   = "tunnel_localizer" 
+		type   = "tunnel_localizer" 
+		output = "screen">
+
+		<remap from="~imu"			to="/khex_com/imu"/>
+		<remap from="~odom_in"			to="/control_odom"/>
+		<remap from="~scan/top"		to="/scan/top"/>
+		<remap from="~scan/bottom"	to="/scan/bottom"/>
+		<remap from="~cam/top"		to="/cam1/image"/>
+		<remap from="~cam/right"		to="/cam0/image"/>
+		<remap from="~cam/left"	to="/cam3/image"/>
+		<remap from="~cam/bottom"	to="/cam2/image"/>
+
+		<param name="debug_mode"	value="FALSE"/>
+		<param name="refresh_rate"	value="40.0"/>	
+		<param name="map_path"		value="$(arg map_path)"/>
+		<param name="top_lidar_calib_file"		value="$(find calib_data)/lidar/ins_khex_top_lidar.yaml"/>
+		<param name="bottom_lidar_calib_file"	value="$(find calib_data)/lidar/ins_khex_bottom_lidar.yaml"/>
+		<param name="top_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_top_cam.yaml"/>
+		<param name="right_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_right_cam.yaml"/>
+		<param name="bottom_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_bottom_cam.yaml"/>
+		<param name="left_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_left_cam.yaml"/>
+</node> 
+
+#### start UKF Lite ##############################
+
+<node pkg ="quadrotor_ukf_lite" 
+	  name="quadrotor_ukf" 
+	  type="quadrotor_ukf" 
+	  output="screen">
+      <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
+      <remap from="~imu" to="/khex_com/imu"/> 
+      <remap from="~odom_slam" to="/tunnel_localizer/odom_out"/>
+</node> 
+
+#### start PID Controller  ######################
+
+<node pkg="pid_cont"
+    name="pid_cont"
+    type="pid_cont_node"
+    output="screen">
+
+    <remap from="~heading" to="/rc_nav/heading" />
+    <remap from="~pdcmd"   to="/khex_com/cmd" />
+
+    <rosparam file="$(find pid_cont)/config/insp_khex_params.tunnel_localizer.yaml"/>
+
+  </node>
+  
+<node pkg = "rosbag"
+      name = "rosbag"
+      type = "record"
+      output = "screen"
+      args="/khex_com/cmd /khex_com/rc /khex_com/imu /khex_com/status /rc_nav/heading /tunnel_localizer/odom_out /control_odom /goal /scan/top /scan/bottom 
+              /cam0/image /cam1/image /cam2/image /cam3/image">
+</node>
+
+<node pkg="tf" type="static_transform_publisher" name="laser_link" args="0 0 0 0 0 0 /world /laser 100"/>
+<node pkg="tf" type="static_transform_publisher" name="body_link" args="0 0 0 0 0 0 /world /body 100"/>
+
+</launch>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

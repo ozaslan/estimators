@@ -15,7 +15,7 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 # 3 needs work
 
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne05.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne01.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
 
 <node	pkg ="rosbag"
