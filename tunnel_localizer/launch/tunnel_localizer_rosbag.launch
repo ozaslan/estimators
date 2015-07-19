@@ -15,7 +15,7 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 # 3 needs work
 
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne01.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne06.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
 
 <node	pkg ="rosbag"
@@ -24,12 +24,15 @@ Example launch file: launches the scan matcher with pre-recorded data
     output="screen"
     args  ="--loop --rate=1 $(arg bagfile_path) --start=0 --duration=9999 --delay=.5 --quiet ">
     <remap from="/khex_com/imu" to="/khex/imu" />
+    <remap from="/control_odom" to="/dummy1" />
+    <remap from="/tunnel_localizer/odom_out" to="dummy2" />
     <!--
     <remap from="/cam0/image/compressed" to="/cam2/image" />
     <remap from="/cam1/image/compressed" to="/cam0/image" />
     -->
 </node>
 
+<!--
 <node pkg  = "image_transport"
       name = "republish0"
       type = "republish"
@@ -43,6 +46,8 @@ Example launch file: launches the scan matcher with pre-recorded data
       output = "screen"
       args = " compressed in:=/cam1/image raw out:=/cam0/image" >
 </node>
+-->
+
 
 #### start the Tunnel Localizer ##############################
 
@@ -56,9 +61,9 @@ Example launch file: launches the scan matcher with pre-recorded data
 		<remap from="~scan/top"		to="/scan/top"/>
 		<remap from="~scan/bottom"	to="/scan/bottom"/>
 		<remap from="~cam/top"		to="/cam1/image"/>
-		<remap from="~cam/bottom"	to="/cam3/image"/>
-		<remap from="~cam/right"	to="/cam2/image"/>
-		<remap from="~cam/left"		to="/cam0/image"/>
+		<remap from="~cam/bottom"	to="/cam2/image"/>
+		<remap from="~cam/right"	to="/cam0/image"/>
+		<remap from="~cam/left"		to="/cam3/image"/>
 
 		<param name="debug_mode"	value="FALSE"/>
 		<param name="refresh_rate"	value="40.0"/>	
@@ -98,6 +103,15 @@ Example launch file: launches the scan matcher with pre-recorded data
 		output="screen">
 		<remap from="~odom" to="/control_odom"/>
 	    <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+
+</node>
+
+<node	pkg ="odom_visualization"
+		name="goal_odom_visualization"
+		type="odom_visualization_node"
+		output="screen">
+		<remap from="~odom" to="/rc_nav/goal"/>
+	    <rosparam file="$(find odom_visualization)/config/config03.yaml" />
 
 </node>
 

@@ -23,14 +23,28 @@ Example launch file: launches the scan matcher with pre-recorded data
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine03_run.bag" />
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/levine02.bag" />
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/6April/state_farm01.bag" />
--->
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/statefarm_dataset/mrsl03.bag" />
+-->
+
+# 1 is really good
+# 2 is really good.
+# 3 is good after 30 secs.
+# 4 does not work
+# 5 starts well. If only I can make this work!!!
+# 6 is good after 25 but needs work. This might be a good dataset
+# 7 no chance!!!
+
+# For visualization use octomaps own visualizer.
+
+
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/12Jul2015SSRR/4.bag" />
 <node	pkg ="rosbag"
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=1.0 $(arg bagfile_path) --start=0 --duration=10000 --clock ">
+    args  ="--loop --rate=0.50 $(arg bagfile_path) --start=111.5 --duration=10000 --clock --pause">
     <remap from="raw_imu" to="/khex/imu" />
+    <remap from="/khex_com/imu" to="/khex/imu" />
 </node>
 
 #### start the Laser Processors  ##############################

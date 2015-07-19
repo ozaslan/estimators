@@ -103,16 +103,16 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 	double t_update[2];
 	double rot_update[2];
 
-  _max_iter = 2;
+	_max_iter = 2;
 
 	for(int iter = 0 ; iter < _max_iter; iter++){
-		cout << "% ------------------------------------------------------%" << endl;
-		cout << "iter = " << iter << ";" << endl;
-	
+		//cout << "% ------------------------------------------------------%" << endl;
+		//cout << "iter = " << iter << ";" << endl;
+
 		int idx2 = iter % 2;
 		int idx4 = 2 * (iter % 2);
 
-		cout << "idx2 = " << idx2 << endl;
+		//cout << "idx2 = " << idx2 << endl;
 
 		//if(idx2 == 1)
 		//	continue;
@@ -122,24 +122,24 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 		Eigen::Matrix4d sensor_relative_pose_inv = sensor_relative_pose.inverse();
 		const vector<Eigen::Vector3d> &_3d_rays	 = (idx2 == 0) ? bottom_3d_rays : top_3d_rays;
 
-    cout << "dicp[-1] = " << endl << dicp << endl;
+		//cout << "dicp[-1] = " << endl << dicp << endl;
 
 		// * transformation from 1st sensor frame to 0th sensor frame
 		T = sensor_relative_pose_inv * dicp * sensor_relative_pose;
 
-    cout << "T = " << endl << T << endl;
+		//cout << "T = " << endl << T << endl;
 
 		// Extract the projection of T on the current sensor frame
 		csm_init_pose(0) = T(0, 3); // x
 		csm_init_pose(1) = T(1, 3); // y
 		csm_init_pose(2) = 0;		// apply the rotation in the below loop instead
 
-		cout << "csm_init_pose = " << csm_init_pose << endl;
+		//cout << "csm_init_pose = " << csm_init_pose << endl;
 
 		// Rotational component of the transformation free of yaw in the sensor frame
 		T_dcm = T.topLeftCorner<3, 3>();
 
-		cout << "T_dcm = " << endl << T_dcm << endl;
+		//cout << "T_dcm = " << endl << T_dcm << endl;
 
 		// Apply the initial transformation on the lidar data 
 		// and re-calculate the angles
@@ -168,20 +168,20 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 		   double  restart_threshold_mean_error = 0.05,
 		   double  restart_dt = 0.05,
 		   double  restart_dtheta = 5 * 0.0261799);
-		*/
+		 */
 
 		csm_result = utils::laser::register_scan(ranges[idx4], masks[idx4], ths[idx4], ranges[idx4 + 1], masks[idx4 + 1], ths[idx4 + 1], 
-				csm_init_pose, false, 20, 0.50, 133, 0.001, 0.001, 0.55, 0.01, true, true); 
+				csm_init_pose, true, 20, 0.50, 33, 0.001, 0.001, 0.55, 0.01, true, true); 
 
-		cout << "csm_result = " << csm_result << endl;
+		//cout << "csm_result = " << csm_result << endl;
 
 		if(idx2 == 1){
 			//csm_result(0) = .3;
 		}
 
 		if(csm_result(3) == 0){
-			cout << "invalid CSM" << endl;
-			cout << csm_result(4) << endl;
+			//cout << "invalid CSM" << endl;
+			//cout << csm_result(4) << endl;
 			continue;
 		}
 
@@ -197,20 +197,20 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 		ddicp(0, 3) = csm_result(0);
 		ddicp(1, 3) = csm_result(1);
 
-		cout << "ddicp[0] = " << endl << ddicp << endl << endl;
+		//cout << "ddicp[0] = " << endl << ddicp << endl << endl;
 
 		// Subtract the effect of the initial pose. This is how CSM works unfortunately.
 		ddicp = csm_init_pose_se3.inverse() * ddicp;
 
-		cout << "ddicp[1] = " << endl << ddicp << endl << endl;
+		//cout << "ddicp[1] = " << endl << ddicp << endl << endl;
 
 		// * trans. from 1st robot frame to 0th robot frame
 		ddicp = sensor_relative_pose * ddicp * sensor_relative_pose_inv;
 
-		cout << "sensor_relative_pose = " << sensor_relative_pose << endl;
-		cout << "sensor_relative_pose_inv = " << sensor_relative_pose_inv << endl;
+		//cout << "sensor_relative_pose = " << sensor_relative_pose << endl;
+		//cout << "sensor_relative_pose_inv = " << sensor_relative_pose_inv << endl;
 
-		cout << "ddicp[2] = " << endl << ddicp << endl << endl;
+		//cout << "ddicp[2] = " << endl << ddicp << endl << endl;
 
 		//ddicp(0, 2) = 0;
 		//ddicp(1, 2) = 0;
@@ -219,7 +219,7 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 
 		dicp = dicp * ddicp;
 
-		cout << "dicp = " << endl << dicp << endl << endl;
+		//cout << "dicp = " << endl << dicp << endl << endl;
 
 		t_update[idx2]   = ddicp.topRightCorner<3, 1>().norm();
 		rot_update[idx2] = utils::trans::dcm2rpy(dicp.topLeftCorner<3, 3>()).cwiseAbs().maxCoeff();
@@ -228,7 +228,7 @@ Eigen::Matrix4d TwoLidarsOdom::estimate_odometry(const LaserProc bottom_laser_pr
 			break;
 	}
 
-	cout << ">>> dicp = " << endl << dicp << endl;
+	//cout << ">>> dicp = " << endl << dicp << endl;
 
 	_pose = _pose * dicp;
 

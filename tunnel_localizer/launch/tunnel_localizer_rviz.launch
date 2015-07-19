@@ -1,0 +1,53 @@
+<launch>
+
+#### start RVIZ Visualization ##############################
+
+<node	pkg ="odom_visualization"
+		name="meas_odom_visualization"
+		type="odom_visualization_node"
+		output="screen">
+		<remap from="~odom" to="/tunnel_localizer/odom_out"/>
+	    <rosparam file="$(find odom_visualization)/config/config01.yaml" />
+</node>
+
+<node	pkg ="odom_visualization"
+		name="ukf_odom_visualization"
+		type="odom_visualization_node"
+		output="screen">
+		<remap from="~odom" to="/control_odom"/>
+	    <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+
+</node>
+
+<node	pkg ="odom_visualization"
+		name="goal_odom_visualization"
+		type="odom_visualization_node"
+		output="screen">
+		<remap from="~odom" to="/rc_nav/goal"/>
+	    <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+
+</node>
+
+<node	pkg="rviz"
+		name="rviz"
+		type="rviz"
+		output="screen"
+		args  ="-d $(find tunnel_localizer)/rviz/tunnel_localizer01.rviz">
+		<param name="fixed-frame"	 value="world"/>
+</node>
+
+<node pkg    = "status_visualization"
+        name   = "status_visualization"
+        type   = "status_visualization_node"
+        output = "screen" >
+
+        <remap from="~rc"     to="/khex_com/rc" />
+        <remap from="~status" to="/khex_com/status" />
+        <rosparam file="$(find status_visualization)/config/ins_khex_status_config.tunnel_localizer.yaml" />
+        <param name="refresh_rate"   value="25.0" />
+        <param name="debug_mode"     value="FALSE" />
+        <param name="rc_config_path" value="$(find rc_proc)/config/ins_khex_rc_config.yaml" />
+        <param name="panel_path"     value= "$(find status_visualization)/config/panel.png" />
+</node>
+
+</launch>

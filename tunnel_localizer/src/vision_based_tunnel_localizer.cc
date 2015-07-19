@@ -42,6 +42,7 @@ bool VisionBasedTunnelLocalizer::push_camera_data(const vector<cv::Mat> &frames,
 	// ### Parallelize this part with boost or p_thread.
 	for(int t = 0 ; t < (int)_trackers.size() ; t++){
 		_trackers[t].track_features(frames[t], _extractor, _cam_params[t].image_mask);
+    /*
 		if(t == 0){
 			cv::namedWindow("0");
 			cv::imshow("0", frames[t]);
@@ -49,6 +50,7 @@ bool VisionBasedTunnelLocalizer::push_camera_data(const vector<cv::Mat> &frames,
 			cv::namedWindow("1");
 			cv::imshow("1", frames[t]);
 		}
+    */
 		if(_feats[!_feat_buffer_idx][t].size() == 0){
 			//cout << "Filling up the other buffer" << endl;
 			_trackers[t].get_features(   _feats[!_feat_buffer_idx][t], 

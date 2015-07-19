@@ -9,6 +9,10 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
 
+#include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+
+
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
 
@@ -56,6 +60,7 @@ double	linearity_thres			 = 0.3;
 // -------- COMMUNICATION INTERFACE DECLERATIONS ---------------------------------------------- //
 // * Required publication channels
 ros::Publisher odom_publ;
+image_transport::Publisher flow_img_publ;
 // * Required subscription channels
 ros::Subscriber 
 	imu_subs,

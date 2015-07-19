@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /UKF Odom1
+        - /Goal Odom1/Robot1
+        - /Goal Odom1/Axes1
+        - /Flow Image1
       Splitter Ratio: 0.565056
     Tree Height: 537
   - Class: rviz/Selection
@@ -27,7 +29,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Top Camera
+    SyncSource: Map
 Visualization Manager:
   Class: ""
   Displays:
@@ -53,11 +55,70 @@ Visualization Manager:
       Displays:
         - Class: rviz/Image
           Enabled: true
+          Image Topic: /cam1/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Top
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: true
+        - Class: rviz/Image
+          Enabled: true
+          Image Topic: /cam0/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Right
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: true
+        - Class: rviz/Image
+          Enabled: true
+          Image Topic: /cam2/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Bottom
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: true
+        - Class: rviz/Image
+          Enabled: true
+          Image Topic: /cam3/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Left
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Value: true
+      Enabled: false
+      Name: Raw Img.
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Image
+          Enabled: true
           Image Topic: /cam0/image
           Max Value: 1
           Median window: 5
           Min Value: 0
           Name: Right Camera
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: compressed
+          Value: true
+        - Class: rviz/Image
+          Enabled: true
+          Image Topic: /cam1/image
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Top Camera
           Normalize Range: true
           Queue Size: 2
           Transport Hint: compressed
@@ -84,8 +145,8 @@ Visualization Manager:
           Queue Size: 2
           Transport Hint: compressed
           Value: true
-      Enabled: true
-      Name: Cameras
+      Enabled: false
+      Name: Comp. Img.
     - Class: rviz/Image
       Enabled: true
       Image Topic: /status_visualization/panel
@@ -209,7 +270,7 @@ Visualization Manager:
       Marker Topic: /tunnel_localizer/debug/residual_rays
       Name: Residuals
       Namespaces:
-        {}
+        "": true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -224,7 +285,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -240,26 +301,53 @@ Visualization Manager:
       Topic: /tunnel_localizer/debug/pc/aligned_sensor_data
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
-    - Class: rviz/Image
-      Enabled: true
-      Image Topic: /cam1/image
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Top Camera
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: compressed
-      Value: true
+      Value: false
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /tunnel_localizer/debug/flow_rays
       Name: Flow Vectors
       Namespaces:
-        {}
+        "": true
       Queue Size: 100
       Value: true
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /goal_odom_visualization/mesh
+          Name: Robot
+          Namespaces:
+            odom_visualization: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /goal_odom_visualization/vel
+          Name: Velocity
+          Namespaces:
+            vel: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Axes
+          Enabled: true
+          Length: 0.8
+          Name: Axes
+          Radius: 0.05
+          Reference Frame: robot_goal
+          Value: true
+      Enabled: true
+      Name: Goal Odom
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /tunnel_localizer/debug/flow_image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Flow Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 16; 0; 25
@@ -283,35 +371,40 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz/Orbit
-      Distance: 10
+      Angle: -1.54
+      Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
-      Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.605398
+      Scale: 55.3852
       Target Frame: <Fixed Frame>
-      Value: Orbit (rviz)
-      Yaw: 3.1854
+      Value: TopDownOrtho (rviz)
+      X: 11.7081
+      Y: -0.406279
     Saved: ~
 Window Geometry:
+  Bottom:
+    collapsed: false
   Bottom Camera:
     collapsed: false
   Displays:
     collapsed: false
+  Flow Image:
+    collapsed: false
   Height: 818
   Hide Left Dock: false
-  Hide Right Dock: true
+  Hide Right Dock: false
+  Left:
+    collapsed: false
   Left Camera:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000010f000002a8fc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006400fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000028000002a8000000dd00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000001800520069006700680074002000430061006d00650072006103000004d2000001210000013c00000114fb0000001a0042006f00740074006f006d002000430061006d00650072006103000004d40000023a0000013c0000010afb00000016004c006500660074002000430061006d0065007200610300000387000002350000014600000110fb000000140054006f0070002000430061006d00650072006103000004d10000000e0000014a00000116fb00000018005300740061007400750073002000500061006e0065006c03000003a0000001670000010f000000bb000000010000010f00000244fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000002800000244000000b000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ad0000003efc0100000002fb0000000800540069006d00650100000000000004ad000002f600fffffffb0000000800540069006d0065010000000000000450000000000000000000000398000002a800000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000010f000002a8fc0200000014fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006400fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000028000002a8000000dd00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000001800520069006700680074002000430061006d00650072006102000004cb000000bc00000112000000f2fb0000001a0042006f00740074006f006d002000430061006d00650072006102000004d10000025e00000113000000defb00000016004c006500660074002000430061006d00650072006102000004ce000001a100000113000000e4fb000000140054006f0070002000430061006d00650072006102000004cb0000000e00000114000000e4fb00000018005300740061007400750073002000500061006e0065006c03000004910000000e0000010f000000bbfb0000000c00430061006d00650072006102000002ac000001370000010f000000bbfb0000000a0052006900670068007402000004c2000000180000010f000000e7fb000000060054006f007002000004c5000000bb0000010c000000e4fb0000000c0042006f00740074006f006d02000004c3000001930000010f000000e4fb00000008004c00650066007402000004c60000026c0000010f000000e6fb000000140046006c006f007700200049006d006100670065020000046a00000129000001660000013bfb000000140046006c006f007700200049006d0061006700650300000467000002000000018000000139000000010000010f000002a8fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730100000028000002a8000000b000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004ad0000003efc0100000002fb0000000800540069006d00650100000000000004ad000002f600fffffffb0000000800540069006d0065010000000000000450000000000000000000000283000002a800000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Right:
+    collapsed: false
   Right Camera:
     collapsed: false
   Selection:
@@ -322,10 +415,12 @@ Window Geometry:
     collapsed: false
   Tool Properties:
     collapsed: false
+  Top:
+    collapsed: false
   Top Camera:
     collapsed: false
   Views:
-    collapsed: true
+    collapsed: false
   Width: 1197
   X: 37
-  Y: 24
+  Y: 14

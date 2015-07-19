@@ -14,6 +14,7 @@
 	<depend package="roscpp"/>
 	<depend package="pcl_ros"/>
 	<depend package="nav_msgs"/>
+	<depend package="cv_bridge"/>
 	<depend package="laser_proc"/>
 	<depend package="sensor_msgs"/>
 	<depend package="pcl_conversions"/>
@@ -21,6 +22,7 @@
 	<depend package="uniform_feat_tracker"/>
 	<depend package="calib_params"/>
 	<depend package="cv_bridge"/>
+    <depend package="image_transport"/>
 	<rosdep name="eigen" />
 </package>
 

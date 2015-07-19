@@ -4,7 +4,10 @@
 
 <include file="$(find khex_com)/launch/khex_com.launch" />
 <include file="$(find rc_nav)/launch/rc_nav.launch" />
+<!--
 <include file="$(find bluefox_node)/launch/run_four_cams.launch" />
+-->
+<include file="$(find bluefox_node)/launch/run_right_cam.launch" />
 
 #### start the urg nodes  ##############################
 
@@ -80,12 +83,13 @@
       name = "rosbag"
       type = "record"
       output = "screen"
-      args="/khex_com/cmd /khex_com/rc /khex_com/imu /khex_com/status /rc_nav/heading /tunnel_localizer/odom_out /control_odom /goal /scan/top /scan/bottom 
+      args="/khex_com/cmd /khex_com/rc /khex_com/imu /khex_com/status /rc_nav/heading /rc_nav/goal /tunnel_localizer/odom_out /control_odom  /scan/top /scan/bottom 
               /cam0/image /cam1/image /cam2/image /cam3/image">
 </node>
 
 <node pkg="tf" type="static_transform_publisher" name="laser_link" args="0 0 0 0 0 0 /world /laser 100"/>
 <node pkg="tf" type="static_transform_publisher" name="body_link" args="0 0 0 0 0 0 /world /body 100"/>
+<node pkg="tf" type="static_transform_publisher" name="map_link" args="0 0 0 0 0 0 /world /map 100"/>
 
 </launch>
 

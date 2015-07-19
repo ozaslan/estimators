@@ -23,6 +23,6 @@ extract_lines_min_len: 0.10
 extract_lines_min_pts: 3
 extract_lines_epsilon: 0.08
 project: FALSE
-intensity_filter: TRUE
+intensity_filter: FALSE
 intensity_thres: 500.0
 

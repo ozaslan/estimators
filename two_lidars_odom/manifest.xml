@@ -16,7 +16,6 @@ two_lidars_odom
   <depend package="visualization_msgs"/>
   <depend package="calib_params"/>
   <depend package="cv_bridge"/>
-  <depend package="laser_proc"/>
   <depend package="roof_estimator"/>
   <rosdep name="eigen" />
   <depend package="octomap" />
