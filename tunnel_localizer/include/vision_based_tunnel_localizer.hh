@@ -86,7 +86,7 @@ class VisionBasedTunnelLocalizer{
 		// 
 		VisionBasedTunnelLocalizer(int num_feats = 100, int history_len = 7, 
 				string detector_type = string("FAST"), 
-				double threshold = 9);
+				double threshold = 5);
 		// This function calculates the displacement along the tunnel axis (world-x dir.) by 
 		// utilizing the set of frames. At every call image features are extracted and
 		// tracked from the previous frame. The user might want to estimate the displacement

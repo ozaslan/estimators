@@ -325,6 +325,9 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 				tip_proj[0].y = tip_dir(1) + tip_origin(1);
 				tip_proj[0].z = tip_dir(2) + tip_origin(2);
 
+				if(tail_proj[0].x != tail_proj[0].x ||
+				    tip_proj[0].x !=  tip_proj[0].x)
+					continue;
 				_of_tail_vecs.push_back(tail_proj[0]);
 				_of_tip_vecs.push_back(tip_proj[0]);
 			}    
@@ -368,6 +371,7 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 	if(x_disps.size() != 0){
 		//std::sort(x_disps.begin(), x_disps.end());
 		//x_disp = _x_disp = x_disps[x_disps.size() / 2.0];
+		
 		for(int i = 0 ; i < (int)x_disps.size() ; i++)
 			_x_disp += x_disps[i];
 		_x_disp /= x_disps.size();

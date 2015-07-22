@@ -1,7 +1,7 @@
 #include "tunnel_localizer_node.hh"
 
 bool got_odom_msg = false;
-double x_pos_estm = 7;
+double x_pos_estm = 10; //####
 
 int main(int argc, char* argv[]){
 
@@ -189,6 +189,8 @@ void iterate_estimator(){
 	tunnel_localizer.get_covariance(estm_cov);
 
 	x_pos_estm = estm_pose(0, 3);
+
+  cout << "x_pos_estm = " << x_pos_estm << endl;
 
 	//cout << "X_POS_ESTM = " << x_pos_estm << endl;
 	//cout << "estm_pose = " << endl << estm_pose << endl;

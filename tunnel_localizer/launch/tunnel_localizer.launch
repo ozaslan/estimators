@@ -1,9 +1,15 @@
 <launch>
-
+<!--
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
+<arg name="map_path"      value="$(find map_server)/maps/tunnel.pcd" />
+<arg name="map_path"      value="$(find map_server)/maps/glen_corridor.pcd" />
+-->
+
+<arg name="map_path"      value="$(find map_server)/maps/glen_penstock_horizontal.pcd" />
 
 <include file="$(find khex_com)/launch/khex_com.launch" />
 <include file="$(find rc_nav)/launch/rc_nav.launch" />
+
 <!--
 <include file="$(find bluefox_node)/launch/run_four_cams.launch" />
 -->
@@ -35,19 +41,19 @@
 		output = "screen">
 
 		<remap from="~imu"			to="/khex_com/imu"/>
-		<remap from="~odom_in"			to="/control_odom"/>
+		<remap from="~odom_in"		to="/control_odom"/>
 		<remap from="~scan/top"		to="/scan/top"/>
 		<remap from="~scan/bottom"	to="/scan/bottom"/>
 		<remap from="~cam/top"		to="/cam1/image"/>
-		<remap from="~cam/right"		to="/cam0/image"/>
-		<remap from="~cam/left"	to="/cam3/image"/>
+		<remap from="~cam/right"	to="/cam0/image"/>
+		<remap from="~cam/left"	    to="/cam3/image"/>
 		<remap from="~cam/bottom"	to="/cam2/image"/>
 
 		<param name="debug_mode"	value="FALSE"/>
 		<param name="refresh_rate"	value="40.0"/>	
 		<param name="map_path"		value="$(arg map_path)"/>
-		<param name="top_lidar_calib_file"		value="$(find calib_data)/lidar/ins_khex_top_lidar.yaml"/>
-		<param name="bottom_lidar_calib_file"	value="$(find calib_data)/lidar/ins_khex_bottom_lidar.yaml"/>
+		<param name="top_lidar_calib_file"		value="$(find calib_data)/lidar/glen_ins_khex_top_lidar.yaml"/>
+		<param name="bottom_lidar_calib_file"	value="$(find calib_data)/lidar/glen_ins_khex_bottom_lidar.yaml"/>
 		<param name="top_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_top_cam.yaml"/>
 		<param name="right_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_right_cam.yaml"/>
 		<param name="bottom_cam_calib_file"		value="$(find calib_data)/camera/ins_khex_bottom_cam.yaml"/>
