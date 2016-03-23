@@ -1,0 +1,24 @@
+<package>
+  <description brief="of_estimator">
+
+     of_estimator
+
+  </description>
+  <author>ozaslan</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/of_estimator</url>
+
+  <depend package="roscpp"/>
+  <depend package="utils"/>
+  <depend package="sensor_msgs"/>
+  <depend package="cv_bridge"/>
+ 
+  <export>
+    <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib -lof_estimator"/>
+  </export>
+
+
+</package>
+
+
