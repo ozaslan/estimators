@@ -105,6 +105,8 @@ int publish_of_field()
 		of_field_msg.tips[i].z = 0;
 	}
 
+	ofe.get_cluster_ids(of_field_msg.cluster_ids);
+
 	of_field_publ.publish(of_field_msg);
 
 	return 0;
@@ -142,6 +144,7 @@ void image_callback(const sensor_msgs::Image &msg)
 
 	ofe.push_image(img);
 	ofe.estimate_of();
+	ofe.cluster_planes();
 
 	publish_of_field();
 	publish_of_image();

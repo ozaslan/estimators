@@ -11,6 +11,15 @@ int OpticalFlowEstimator::_initialize(){
 
 	_term_criteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
 
+	vector<Eigen::Vector3i> temp_colors;
+	utils::generate_colors(temp_colors);
+	_colors.resize(temp_colors.size());
+	for(int i = 0 ; i < (int)temp_colors.size() ; i++){
+		_colors[i](0) = temp_colors[i](0);
+		_colors[i](1) = temp_colors[i](1);
+		_colors[i](2) = temp_colors[i](2);
+	}
+
 	_tails.clear();
 	_tips.clear();
 
@@ -137,18 +146,33 @@ int OpticalFlowEstimator::plot_of_field(cv::Mat &image){
 	if(image.size() != _pyras[(_img_idx + 1) % 2][0].size())
 		_pyras[(_img_idx + 1) % 2][0].copyTo(image);
 
+	cv::Scalar color(0, 250, 0);
+
 	int num_vectors = _tails.size();
 	for(int i = 0 ; i < num_vectors ; i++){
 		if(_status[i] != 0){
+			if(_cluster_ids.size() != 0)
+				color = _colors[_cluster_ids[i]];
 			cv::Point2d tip = _tails[i] + 3 * (_tips[i] - _tails[i]);
-			cv::line(image, _tails[i], tip, cv::Scalar(0, 250, 0), 1);
+			cv::line(image, _tails[i], tip, color, 1);
 			//cv::line(image, _tails[i], _tips[i], cv::Scalar(0, 250, 0), 1);
 			//cv::arrowedLine(image, _tails[i], _tips[i], cv::Scalar(0, 255, 0), 1, cv::CV_AA, 0, 0.1);
-			cv::circle(image, _tails[i], 2.3, cv::Scalar(0, 250, 0), -1);
+			cv::circle(image, _tails[i], 2.3, color, -1);
 		}
 	}
 
 	return 0;
+}
 
 
+int OpticalFlowEstimator::cluster_planes(){
+	if(_tails.size() == 0 || _tips.size() != _tails.size()){
+		_cluster_ids.clear();
+		return -1;
+	}
+
+	//++: Mat findHomography(InputArray srcPoints, InputArray dstPoints, int method=0, double ransacReprojThreshold=3, OutputArray mask=noArray() )¶
+	cv::findHomography(_tails, _tips, cv::RANSAC, 3, _cluster_ids);
+
+	return 0;
 }

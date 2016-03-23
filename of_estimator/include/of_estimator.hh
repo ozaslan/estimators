@@ -39,9 +39,12 @@ private:
   vector<cv::Point2f> _tips;
 
   vector<unsigned char> _status;
+  vector<unsigned char> _cluster_ids;
   vector<float> _err;
 
   cv::TermCriteria _term_criteria;
+
+  vector<cv::Scalar> _colors;
 
   int _calc_tail_coords();
   int _initialize();
@@ -84,6 +87,16 @@ public:
   // of the previous frame is cloned to 'image'. If flow field has not been
   // estimated yet, this function returns '-1' otherwise '0'.
   int plot_of_field(cv::Mat &image);
+  // This functions clusters the OF vectors into homography groups
+  // using sample consensus algorithms like RANSAC, LMED.
+  int cluster_planes();
+  // This function returns the cluster ids determined by the 'cluster_planes(...)'
+  // function. This returns '0' is the '_cluster_ids' vector is non-empty, otherwise
+  // '-1'.
+  int get_cluster_ids(vector<unsigned char> &cluster_ids){
+    cluster_ids = _cluster_ids;
+    return _cluster_ids.size() == 0 ? -1 : 0;
+  }
 };
 
 #endif

@@ -15,7 +15,7 @@
   	  <param name="camera_idx"      value="0"       />
   	  <param name="camera_serial"   value="29900145" type="str"/>
 	  <param name="camera_name"     value="camera"  />
-	  <param name="exposure_us"     value="40000"  />
+	  <param name="exposure_us"     value="10000"  />
 	  <param name="hdr_mode"        value="true"   />
 	  <param name="gain_dB"		    value="0.1"   />
 	  <param name="color_mode"      value="true"    />
@@ -51,6 +51,13 @@
 	  <remap from="/image" to="/of_estimator_node/of_image"/>
 </node>
 
+<node pkg   ="image_proc"
+	  name  ="image_proc"
+	  type  ="image_proc"
+	  ns    ="/camera"
+	  output="screen">
+</node>
+
 <node pkg   ="of_estimator"
       name  ="of_estimator_node"
       type  ="of_estimator_node"
@@ -59,9 +66,9 @@
   	  <param name="debug_mode"    value="false" />
 	  <param name="grid_cols"     value="-10"   />
 	  <param name="grid_rows"     value="-8"    />
-	  <param name="pyra_levels"   value="4"     />
+	  <param name="pyra_levels"   value="3"     />
 	  <param name="use_init_flow" value="false" />
-	  <remap from="~image_raw" to="/camera/image_raw"/>
+	  <remap from="~image_raw" to="/camera/image_rect"/>
 </node>
 
 
