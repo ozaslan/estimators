@@ -1,0 +1,50 @@
+<!--
+
+-->
+
+<launch>
+
+<!--
+<include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
+<include file="$(find mavros)/launch/px4.launch" />
+-->
+
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne04.bag" />
+
+<node pkg="rosbag"
+      name="play"
+      type="play"
+      output="screen"
+      args="--loop --pause $(arg bagfile_path)" />
+
+<node pkg="tf" 
+      type="static_transform_publisher" 
+      name="fcu_link_publisher" 
+      args="0 0 0 0 0 0 fcu velodyne 100" />
+
+<node pkg ="rviz"
+      name="rviz"
+      type="rviz"
+      args="-d $(find velodyne_odom)/rviz/velodyne_odom.rviz"/>
+
+<node pkg ="velodyne_odom"
+      name="velodyne_odom_node"
+      type="velodyne_odom_node"
+      output="screen">
+
+      <param name="debug_mode"        value = "false"        />
+      <remap from="~/imu"             to="/mavros/imu/data" />
+      <remap from="~/velodyne_points" to="/velodyne_points" />
+      <remap from="~/odom" to="/velodyne_odom" />
+</node>
+
+<node name="odom_visualization"
+      pkg ="odom_visualization"
+      type="odom_visualization_node"
+      output="screen" >
+                         
+      <remap from="~odom" to="/velodyne_odom"/>
+      <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+</node>
+
+</launch>

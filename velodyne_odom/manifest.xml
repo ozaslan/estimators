@@ -1,0 +1,18 @@
+<package>
+  <description brief="velodyne_odom">
+
+     velodyne_odom
+
+  </description>
+  <author>ozaslan</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/velodyne_odom</url>
+  <depend package="roscpp"/>
+  <depend package="sensor_msgs"/>
+  <depend package="mavros"/>
+  <depend package="utils"/>
+
+</package>
+
+
