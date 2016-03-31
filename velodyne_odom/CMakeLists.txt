@@ -17,6 +17,15 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
+# I don't know whether the below code upto the "^"'s make any difference!
+set (CMAKE_CXX_FLAGS "-DPCL_ONLY_CORE_POINT_TYPES=ON -DNO_EXPLICIT_INSTANTIATIONS") 
+find_program(CCACHE_FOUND ccache) 
+if(CCACHE_FOUND) 
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache) 
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache) 
+endif(CCACHE_FOUND) 
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 #set the default path for built executables to the "bin" directory
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 #set the default path for built libraries to the "lib" directory

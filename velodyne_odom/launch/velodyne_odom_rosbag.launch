@@ -9,13 +9,13 @@
 <include file="$(find mavros)/launch/px4.launch" />
 -->
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne04.bag" />
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne03.bag" />
 
 <node pkg="rosbag"
       name="play"
       type="play"
       output="screen"
-      args="--loop --pause $(arg bagfile_path)" />
+      args="--loop --pause $(arg bagfile_path) --rate=0.33" />
 
 <node pkg="tf" 
       type="static_transform_publisher" 

@@ -14,10 +14,11 @@ ros::Subscriber imu_subs;
 ros::Publisher  map_publ;
 ros::Publisher  odom_publ;
 ros::Publisher  aligned_pc_publ;
+ros::Publisher  keyframe_pc_publ;
 
 sensor_msgs::Imu imu_msg;
 nav_msgs::Odometry odom_msg;
-sensor_msgs::PointCloud2 map_msg, velodyne_msg, aligned_pc_msg;
+sensor_msgs::PointCloud2 map_msg, velodyne_msg, aligned_pc_msg, keyframe_pc_msg;
 
 void process_inputs(const ros::NodeHandle &n);
 int  setup_messaging_interface(ros::NodeHandle &n);
@@ -64,12 +65,14 @@ int setup_messaging_interface(ros::NodeHandle &n)
 		ROS_INFO(" --- Publishing : ~map");
 		ROS_INFO(" --- Publishing : ~odom");
 		ROS_INFO(" --- Publishing : ~aligned_pc");
+		ROS_INFO(" --- Publishing : ~keyframe_pc");
 	}
 		
 	imu_subs		= n.subscribe("imu", 10, imu_callback, ros::TransportHints().tcpNoDelay());
 	velodyne_subs	= n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
 	map_publ		= n.advertise<sensor_msgs::PointCloud2>("map", 10);
-	aligned_pc_publ	= n.advertise<sensor_msgs::PointCloud2>("aligned_pc", 10);
+	aligned_pc_publ	 = n.advertise<sensor_msgs::PointCloud2>("aligned_pc", 10);
+	keyframe_pc_publ = n.advertise<sensor_msgs::PointCloud2>("keyframe_pc", 10);
 	odom_publ		= n.advertise<nav_msgs::Odometry>("odom", 10);
 
 	return 0;
@@ -111,6 +114,24 @@ int publish_aligned_pc()
 
 	return 0;
 }
+
+int publish_keyframe_pc()
+{
+	if(debug_mode)
+		ROS_INFO("VELODYNE ODOM NODE : Published keyframe_pc PC to ~keyframe_pc");
+
+	static int seq = 0;
+
+	pcl::toROSMsg(*velodyne_odom.get_keyframe_pc(), keyframe_pc_msg);
+
+	keyframe_pc_msg.header.seq = seq++;
+	keyframe_pc_msg.header.stamp = ros::Time::now();
+	keyframe_pc_msg.header.frame_id = "world";
+	keyframe_pc_publ.publish(keyframe_pc_msg);
+
+	return 0;
+}
+
 
 int publish_map()
 {
@@ -158,6 +179,7 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 	publish_odom();
 	publish_map();
 	publish_aligned_pc();
+  publish_keyframe_pc();
 
 	prev_imu_dcm = utils::trans::imu2dcm(imu_msg);
 }
