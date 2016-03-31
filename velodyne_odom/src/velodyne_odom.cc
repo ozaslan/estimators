@@ -16,10 +16,12 @@ int VelodyneOdom::VelodyneOdomParams::print(){
 	cout << "\t batch_ndt_res ------ = " << batch_ndt_res << endl;
 	cout << "\t batch_ndt_max_iter - = " << batch_ndt_max_iter << endl;
 	cout << "\t batch_ndt_step_size  = " << batch_ndt_step_size << endl;
+	/*
 	cout << "\t trans_offset_weight  = " << trans_offset_weight << endl;
 	cout << "\t rot_offset_weight -- = [" << rot_offset_weight[0] << ", " 
 									   << rot_offset_weight[1] << ", "
 									   << rot_offset_weight[2] << "]" << endl;
+	*/
 	cout << "\t init_keyframe_trans_thres = " << init_keyframe_trans_thres << endl;
 	cout << "\t init_keyframe_rot_thres - = " << init_keyframe_rot_thres << endl;
 	cout << "------------------------------------------" << endl;
@@ -70,22 +72,17 @@ VelodyneOdom::VelodyneOdom(const VelodyneOdomParams &params){
 
 double VelodyneOdom::_pose_distance(const Eigen::Matrix4d &pose1, const Eigen::Matrix4d &pose2){
 	Eigen::Matrix4d dpose = pose1.inverse() * pose2;
-	Eigen::Vector3d rpy   = utils::trans::dcm2rpy(dpose.topLeftCorner<3, 3>()).cwiseAbs();
-	return	_params.trans_offset_weight * dpose.topRightCorner<3, 1>().norm() +
-		_params.rot_offset_weight[0] * rpy(0) +
-		_params.rot_offset_weight[1] * rpy(1) +
-		_params.rot_offset_weight[2] * rpy(2);
-
+	Eigen::Vector3d aaxis = utils::trans::dcm2aaxis(utils::trans::cancel_yaw(Eigen::Matrix3d(dpose.topLeftCorner<3, 3>())));
+	//cout << "dpose = " << endl << dpose << endl;
+	//cout << "aaxis = " << endl << aaxis << endl;
+	return dpose.topRightCorner<3, 1>().norm() / _params.init_keyframe_trans_thres + 
+		   aaxis.norm() / _params.init_keyframe_rot_thres;
 }
 
 bool VelodyneOdom::_push_new_keyframe_required(const Eigen::Matrix4d &curr_pose, int key_frame_ind){
 	ASSERT(key_frame_ind < (int)_keyframes.size(), "'key_frame_ind < _keyframes.size()' should hold ");
 
-	return _pose_distance(curr_pose, _keyframe_poses[key_frame_ind]) >=
-		_params.init_keyframe_trans_thres * _params.trans_offset_weight +
-		_params.init_keyframe_rot_thres * (_params.rot_offset_weight[0] +
-				_params.rot_offset_weight[1] +
-				_params.rot_offset_weight[2]);
+	return _pose_distance(curr_pose, _keyframe_poses[key_frame_ind]) >= 1.0;
 }
 
 int VelodyneOdom::_find_closest_keyframe(const Eigen::Matrix4d &curr_pose){

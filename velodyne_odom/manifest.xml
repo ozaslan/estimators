@@ -10,6 +10,7 @@
   <url>http://ros.org/wiki/velodyne_odom</url>
   <depend package="roscpp"/>
   <depend package="sensor_msgs"/>
+  <depend package="geometry_msgs"/>
   <depend package="mavros"/>
   <depend package="utils"/>
 

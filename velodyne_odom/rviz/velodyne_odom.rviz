@@ -6,7 +6,10 @@ Panels:
       Expanded:
         - /Global Options1
         - /Map1/Autocompute Value Bounds1
+        - /Keyframes1
         - /Aligned PC1
+        - /Robot Visualization1
+        - /Robot Visualization1/Path1
       Splitter Ratio: 0.5
     Tree Height: 595
   - Class: rviz/Selection
@@ -95,8 +98,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 4.70254
-        Min Value: -2.76783
+        Max Value: 3.92837
+        Min Value: -2.35235
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -104,7 +107,7 @@ Visualization Manager:
       Color: 0; 0; 127
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -120,7 +123,7 @@ Visualization Manager:
       Topic: /velodyne_odom_node/map
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Angle Tolerance: 0
       Class: rviz/Odometry
       Color: 255; 25; 0
@@ -159,6 +162,13 @@ Visualization Manager:
       Topic: /velodyne_odom_node/keyframe_pc
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Arrow Length: 0.3
+      Class: rviz/PoseArray
+      Color: 255; 25; 0
+      Enabled: true
+      Name: Keyframes
+      Topic: /velodyne_odom_node/keyframe_poses
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -212,7 +222,7 @@ Visualization Manager:
           Class: rviz/Path
           Color: 255; 0; 127
           Enabled: true
-          Line Style: Billboards
+          Line Style: Lines
           Line Width: 0.03
           Name: Path
           Offset:
@@ -269,22 +279,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 13.982
+      Distance: 16.7809
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.748866
-        Y: -1.04487
-        Z: -2.50002
+        X: 2.27189
+        Y: -1.95723
+        Z: 0.357422
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.9348
+      Pitch: 0.93072
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.07368
+      Yaw: 2.99188
     Saved: ~
 Window Geometry:
   Displays:

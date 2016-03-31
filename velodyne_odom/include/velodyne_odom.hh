@@ -45,8 +45,8 @@ public:
 
 		// The two paramters below are used to find the weighted pose differences
 		// in the corresponding directions. 
-		double trans_offset_weight;  // 
-		double rot_offset_weight[3]; // in [r, p, y] order
+		// double trans_offset_weight;  // 
+		// double rot_offset_weight[3]; // in [r, p, y] order
 		// The below threshold values are compared to pose differences when
 		// checking requirement for pushing new keyframes.
 		double init_keyframe_trans_thres;
@@ -61,10 +61,8 @@ public:
 								batch_ndt_step_size(0.1), 
 								batch_ndt_res( 1.0), 
 								batch_ndt_max_iter ( 50),
-								trans_offset_weight(1),
-								rot_offset_weight({0.48, 0.48, 0.04}),
-								init_keyframe_trans_thres(0.25), // cm
-								init_keyframe_rot_thres(DEG2RAD(1)) // radians
+								init_keyframe_trans_thres(1.0), // cm
+								init_keyframe_rot_thres(DEG2RAD(10)) // radians
 								{}
 		int print();
 	};
@@ -153,6 +151,7 @@ public:
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_map(){ return _map;}
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_aligned_pc(){ return _aligned_pc;}
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_keyframe_pc(){ return _keyframes[_curr_keyframe_ind];}
+	const std::vector<Eigen::Matrix4d> & get_keyframe_poses(){ return _keyframe_poses; }
 };
 
 #endif
