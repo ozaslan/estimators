@@ -65,6 +65,79 @@ void VelodyneOdom::_initialize(){
 
   _gtsam_prior_model = gtsam::noiseModel::Diagonal::Variances((gtsam::Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
 
+  /*
+  {
+    double dth = DEG2RAD(15);
+    int ind = 0;
+    for(double th = 0 ; th <= DEG2RAD(360) ; th += dth, ind++){
+      double r = 5;
+      Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+      pose(0, 3) = 5 * cos(th);
+      pose(1, 3) = 5 * sin(th);
+      pose(2, 3) = th;
+      Eigen::Vector3d x, y, z;
+      z(0) = 0; z(1) = 0; z(2) = 1;
+      y = -pose.topRightCorner<3, 1>();
+      y /= y.norm();
+      x = y.cross(z);
+      x /= x.norm();
+      z = x.cross(y);
+      pose.block<3, 1>(0, 0) = x;
+      pose.block<3, 1>(0, 1) = y;
+      pose.block<3, 1>(0, 2) = z;
+      _keyframe_poses.push_back(pose);
+      if(ind == 0){
+        //cout << "adding prior factor..." << endl; fflush(NULL);
+        _gtsam_graph_with_prior.add(gtsam::PriorFactor<gtsam::Pose3>(ind, gtsam::Pose3(_keyframe_poses[ind]), _gtsam_prior_model));
+      } else {
+        //cout << "adding between factor ind = " << ind << " ... " << endl; fflush(NULL);
+        Eigen::Matrix4d dpose = _keyframe_poses[ind - 1].inverse() * _keyframe_poses[ind];
+
+        cout << "pose[" << ind     << "] = " << endl << _keyframe_poses[ind]     << endl;
+        cout << "pose[" << ind - 1 << "] = " << endl << _keyframe_poses[ind - 1] << endl;
+        //cout << "dpose[" << ind << "] = " << endl << dpose << endl;
+    
+        _gtsam_graph_with_prior.add(gtsam::BetweenFactor<gtsam::Pose3>(
+              ind - 1, ind, gtsam::Pose3(dpose), _gtsam_prior_model));
+
+        if(th + dth > DEG2RAD(360)){
+          Eigen::Matrix4d dpose = _keyframe_poses[ind].inverse() * _keyframe_poses[0];
+
+          _gtsam_graph_with_prior.add(gtsam::BetweenFactor<gtsam::Pose3>(
+                ind, 0, gtsam::Pose3(dpose), _gtsam_prior_model));
+        }
+      }
+    }
+
+    gtsam::Values initial;
+    for(int i = 0 ; i < (int)_keyframe_poses.size() ; i++)
+      initial.insert(i, gtsam::Pose3(_keyframe_poses[i]));
+
+    //initial.print();
+
+    //cout << "HERE-01" << endl; fflush(NULL);
+
+    gtsam::Values result = gtsam::LevenbergMarquardtOptimizer(_gtsam_graph_with_prior, initial).optimize();
+
+    //gtsam::Values result = gtsam::GaussNewtonOptimizer(_gtsam_graph_with_prior, initial).optimize();
+
+    //cout << "HERE-02" << endl; fflush(NULL);
+    
+    //result.print();
+
+    for(int i = 0 ; i < (int)_keyframe_poses.size() ; i++){
+      gtsam::Pose3 pose = result.at<gtsam::Pose3>(i);
+      //cout << "Keyframe Pose[" << i << "] before : " << endl << _keyframe_poses[i] << endl;
+      _keyframe_poses[i].topLeftCorner<3, 3>() = pose.rotation().matrix();
+      _keyframe_poses[i].topRightCorner<3, 1>() = pose.translation();
+      //cout << "Keyframe Pose[" << i << "] after  : " << endl << _keyframe_poses[i] << endl;
+    }
+ 
+    //std::cout << "initial error = " << _gtsam_graph_with_prior.error(initial) << std::endl;
+    //std::cout << "final error   = " << _gtsam_graph_with_prior.error(result)  << std::endl;
+  
+  }*/
+
   _params.print();
 }
 
@@ -125,46 +198,8 @@ int VelodyneOdom::_batch_optimize(const vector<int> &keyframe_indices){
   // Calculate the pose-pose distance of all of the keyframes.
   // Starting from the closest pair, re-align all the keyframes with the
   // order as they appear in the sorted distance list.
-  if(keyframe_indices.size() <= 1)
-    return 0;
-  /*
-     for(int i = 0 ; i < (int)keyframe_indices.size() ; i++){
-     double neigh_dist = 9999;
-     double neigh_ind  = -1;
-
-     for(int j = 0 ; j < (int)keyframe_indices.size() ; j++){
-     if(j <= i)
-     continue;
-     double temp_dist = _pose_distance(_keyframe_poses[i], _keyframe_poses[j], 3, DEG2RAD(10));
-     if(temp_dist < neigh_dist){
-     neigh_dist = temp_dist;
-     neigh_ind  = j;
-     }
-     }
-
-     if(neigh_dist > 1)
-     continue;
-
-     _batch_ndt.setInputTarget(_keyframes[i]);
-     _batch_ndt.align(*_keyframes[neigh_ind], _keyframe_poses[neigh_ind].cast<float>());
-
-     Eigen::Matrix4d dpose = _batch_ndt.getFinalTransformation().cast<double>();
-
-     double dtrans = dpose.topRightCorner<3, 1>().norm();
-     Eigen::Vector3d aaxis = utils::trans::dcm2aaxis(dpose.topLeftCorner<3, 3>());
-     double dangle = aaxis.norm();
-   */
-  /*
-     vector<double> dtrans, dangles;
-     for(int j = i ; j < neigh_ind ; j++){
-
-     }
-
-     for(int j = neigh_ind ; j < (int)_keyframe.size() ; j++){
-
-     }
-     }
-   */
+  if(keyframe_indices.size() <= 1);
+  return 0; 
 }
 
 int VelodyneOdom::_cancel_batch_optimization(bool undo_changes){
@@ -172,6 +207,7 @@ int VelodyneOdom::_cancel_batch_optimization(bool undo_changes){
 }
 
 int VelodyneOdom::push_pc(const sensor_msgs::PointCloud2 &pc){
+  // return 0; //###
   pcl::fromROSMsg(pc, *_pc);	
   // If '_map' is empty and/or '_key_frame' is not set, copy.
   if(_map->size() == 0)
@@ -204,6 +240,8 @@ int VelodyneOdom::align(const Eigen::Matrix3d &init_dcm){
 
 int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 
+  // return 0; //###
+
   // Downsample the input point cloud using voxel grids
   _approximate_voxel_filter.setInputCloud(_pc);
   _approximate_voxel_filter.filter(*_filtered_pc);
@@ -234,7 +272,7 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
     _keyframes.push_back(_aligned_pc->makeShared());
     _keyframe_poses.push_back(_pc_pose);
     
-    Eigen::Matrix4d dpose = _pc_pose * _keyframe_poses[_curr_keyframe_ind].inverse();
+    Eigen::Matrix4d dpose = _keyframe_poses[_curr_keyframe_ind].inverse() * _pc_pose;
     //dpose.topRightCorner<3, 1>() = dpose.topLeftCorner<3, 3>().transpose() * dpose.topRightCorner<3, 1>();
 
     _gtsam_graph_with_prior.add(gtsam::BetweenFactor<gtsam::Pose3>(
