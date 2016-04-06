@@ -15,6 +15,13 @@
 
 #include <sensor_msgs/PointCloud2.h>
 
+
+#include <gtsam/geometry/Pose3.h>
+#include <gtsam/slam/BetweenFactor.h>
+#include <gtsam/slam/PriorFactor.h>
+#include <gtsam/nonlinear/GaussNewtonOptimizer.h>
+#include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
+
 /*
 	This class uses PCL functions to align point cloud from Velodyne 
 	range sensor. This also accumulates the previous point cloud data
@@ -51,7 +58,7 @@ public:
 		// checking requirement for pushing new keyframes.
 		double init_keyframe_trans_thres;
 		double init_keyframe_rot_thres;
-
+	
 		VelodyneOdomParams() :	approximate_voxel_leaf_size({0.15, 0.15, 0.15}),
 								ndt_eps(0.01), 
 								ndt_step_size(0.1), 
@@ -90,6 +97,10 @@ private:
 
 	VelodyneOdomParams _params;
 	
+	gtsam::NonlinearFactorGraph _gtsam_graph_with_prior;
+	gtsam::GaussNewtonParams _gtsam_params;
+	gtsam::noiseModel::Diagonal::shared_ptr _gtsam_prior_model;
+
 	// This flag is set to 'true' when the batch optimization is still working.
 	bool _batch_optimizing;
 
@@ -98,6 +109,7 @@ private:
 	// This function calculates the weighted distance between two poses. This is
 	// used in finding the closest keyframe to the current point cloud
 	double _pose_distance(const Eigen::Matrix4d &pose1, const Eigen::Matrix4d &pose2);
+	double _pose_distance(const Eigen::Matrix4d &pose1, const Eigen::Matrix4d &pose2, double trans_thres, double rot_thres);
 	// This function checks whether 'curr_pose' is far from the 'keyframe_ind'th
 	// keyframe. This returns 'true' if the relative rotation as in roll-pitch-yaw
 	// representation or Euclidean displacement is more than '_init_keyframe_trans_thres'
