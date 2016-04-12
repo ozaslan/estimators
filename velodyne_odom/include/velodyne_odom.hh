@@ -10,6 +10,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/registration/ndt.h>
 #include <pcl/filters/approximate_voxel_grid.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/passthrough.h>
 
 #include <pcl/visualization/pcl_visualizer.h>
 
@@ -59,11 +61,11 @@ public:
 		double init_keyframe_trans_thres;
 		double init_keyframe_rot_thres;
 	
-		VelodyneOdomParams() :	approximate_voxel_leaf_size({0.15, 0.15, 0.15}),
+		VelodyneOdomParams() :	approximate_voxel_leaf_size({0.5, 0.5, 0.5}),
 								ndt_eps(0.01), 
 								ndt_step_size(0.1), 
 								ndt_res(1.0), 
-								ndt_max_iter(15),
+								ndt_max_iter(7),
 								batch_ndt_eps(0.01), 
 								batch_ndt_step_size(0.1), 
 								batch_ndt_res( 1.0), 
@@ -76,6 +78,8 @@ public:
 private:
 	// Map of the environment as built by registering PC's
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _map;
+	// Local subset of _map used for point cloud registration. This is used to speed up the process.
+	pcl::PointCloud<pcl::PointXYZ>::Ptr _local_map;
 
 	// Keyframes and their poses in the '_map' frame
 	int _curr_keyframe_ind; // The index of the last used keyframe index
@@ -90,6 +94,8 @@ private:
 
 	// Downsampling mechanism for fasted point registration
 	pcl::ApproximateVoxelGrid<pcl::PointXYZ> _approximate_voxel_filter;
+	pcl::VoxelGrid<pcl::PointXYZ> _voxel_filter;
+	pcl::PassThrough<pcl::PointXYZ> _pass_filter;
 
 	// Registration mechanism	
 	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> _ndt;
@@ -100,6 +106,8 @@ private:
 	gtsam::NonlinearFactorGraph _gtsam_graph_with_prior;
 	gtsam::GaussNewtonParams _gtsam_params;
 	gtsam::noiseModel::Diagonal::shared_ptr _gtsam_prior_model;
+
+	std::vector<std::pair<int, int> > _pose_graph_edges;
 
 	// This flag is set to 'true' when the batch optimization is still working.
 	bool _batch_optimizing;
@@ -161,9 +169,11 @@ public:
 	// This function returns a constant pointer to the '_map' private
 	// variable for visualization and other purposes.
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_map(){ return _map;}
+	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_local_map(){ return _local_map;}
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_aligned_pc(){ return _aligned_pc;}
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_keyframe_pc(){ return _keyframes[_curr_keyframe_ind];}
 	const std::vector<Eigen::Matrix4d> & get_keyframe_poses(){ return _keyframe_poses; }
+	const std::vector<std::pair<int, int> > get_pose_graph_edges(){ return _pose_graph_edges;}
 };
 
 #endif

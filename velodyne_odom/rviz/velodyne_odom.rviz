@@ -6,11 +6,12 @@ Panels:
       Expanded:
         - /Global Options1
         - /Map1/Autocompute Value Bounds1
-        - /Keyframes1
-        - /Aligned PC1
+        - /LocalMap1
         - /Robot Visualization1
+        - /PoseGraph1
+        - /ToBeDeleted1
       Splitter Ratio: 0.5
-    Tree Height: 595
+    Tree Height: 518
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -29,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Aligned PC
+    SyncSource: Keyframe PC
 Visualization Manager:
   Class: ""
   Displays:
@@ -48,57 +49,14 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 33
+      Plane Cell Count: 133
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
-      Axes Length: 3
-      Axes Radius: 0.1
-      Class: rviz/Pose
-      Color: 255; 25; 0
-      Enabled: false
-      Head Length: 0.3
-      Head Radius: 0.1
-      Name: Mavros_Pose
-      Shaft Length: 1
-      Shaft Radius: 0.05
-      Shape: Axes
-      Topic: /mavros/local_position/pose
-      Value: false
-    - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 8.55373
-        Min Value: -4.31946
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 112
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: Velodyne_PC
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.01
-      Style: Points
-      Topic: /velodyne_points
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 3.80516
-        Min Value: -1.29824
+        Max Value: 10.7063
+        Min Value: -0.725586
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -106,7 +64,7 @@ Visualization Manager:
       Color: 0; 0; 127
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -117,22 +75,41 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.03
+      Size (m): 0.05
       Style: Spheres
       Topic: /velodyne_odom_node/map
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
-    - Angle Tolerance: 0
-      Class: rviz/Odometry
-      Color: 255; 25; 0
-      Enabled: false
-      Keep: 1
-      Length: 1
-      Name: Velodyne_Odom
-      Position Tolerance: 0
-      Topic: /velodyne_odom_node/odom
-      Value: false
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 0; 170; 127
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: LocalMap
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.1
+      Style: Flat Squares
+      Topic: /velodyne_odom_node/local_map
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -161,13 +138,6 @@ Visualization Manager:
       Topic: /velodyne_odom_node/keyframe_pc
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
-    - Arrow Length: 0.3
-      Class: rviz/PoseArray
-      Color: 255; 25; 0
-      Enabled: true
-      Name: Keyframes
-      Topic: /velodyne_odom_node/keyframe_poses
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -231,13 +201,13 @@ Visualization Manager:
           Topic: /odom_visualization/path
           Value: true
         - Class: rviz/Marker
-          Enabled: true
+          Enabled: false
           Marker Topic: /odom_visualization/cov
           Name: Covariance
           Namespaces:
-            cov: true
+            {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Alpha: 1
           Axes Length: 1
           Axes Radius: 0.1
@@ -254,6 +224,101 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Robot Visualization
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /pose_graph_visualization/pose_graph/poses
+          Name: Poses
+          Namespaces:
+            pose_graph/edges: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /pose_graph_visualization/pose_graph/edges
+          Name: Edges
+          Namespaces:
+            pose_graph/edges: true
+          Queue Size: 100
+          Value: true
+      Enabled: true
+      Name: PoseGraph
+    - Class: rviz/Group
+      Displays:
+        - Arrow Length: 0.3
+          Class: rviz/PoseArray
+          Color: 255; 25; 0
+          Enabled: false
+          Name: Keyframes
+          Topic: /velodyne_odom_node/keyframe_poses
+          Value: false
+        - Angle Tolerance: 0
+          Class: rviz/Odometry
+          Color: 255; 25; 0
+          Enabled: false
+          Keep: 1
+          Length: 1
+          Name: Velodyne_Odom
+          Position Tolerance: 0
+          Topic: /velodyne_odom_node/odom
+          Value: false
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 8.55373
+            Min Value: -4.31946
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: Intensity
+          Decay Time: 0
+          Enabled: false
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Max Intensity: 114
+          Min Color: 0; 0; 0
+          Min Intensity: 0
+          Name: Velodyne_PC
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.01
+          Style: Points
+          Topic: /velodyne_points
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: false
+        - Alpha: 1
+          Axes Length: 3
+          Axes Radius: 0.1
+          Class: rviz/Pose
+          Color: 255; 25; 0
+          Enabled: false
+          Head Length: 0.3
+          Head Radius: 0.1
+          Name: Mavros_Pose
+          Shaft Length: 1
+          Shaft Radius: 0.05
+          Shape: Axes
+          Topic: /mavros/local_position/pose
+          Value: false
+      Enabled: false
+      Name: ToBeDeleted
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /mono/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: DownCam
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255
@@ -278,30 +343,32 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 11.7213
+      Distance: 13.5829
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.01079
-        Y: -0.665995
-        Z: -2.11753
+        X: 1.62822
+        Y: -0.58563
+        Z: -1.71186
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.96616
+      Pitch: 1.5598
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.04434
+      Yaw: 4.47406
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
+  DownCam:
+    collapsed: false
   Height: 876
   Hide Left Dock: false
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd00000004000000000000013c000002e2fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006400fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000028000002e2000000dd00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000035efc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000280000035e000000b000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000006110000003efc0100000002fb0000000800540069006d0065010000000000000611000002f600fffffffb0000000800540069006d00650100000000000004500000000000000000000004cf000002e200000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000013c000002e5fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006400fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000002800000295000000dd00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000e0044006f0077006e00430061006d01000002c30000004a0000001600ffffff000000010000010f0000035efc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000280000035e000000b000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000006110000003bfc0100000002fb0000000800540069006d0065010000000000000611000002f600fffffffb0000000800540069006d00650100000000000004500000000000000000000004cf000002e500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:

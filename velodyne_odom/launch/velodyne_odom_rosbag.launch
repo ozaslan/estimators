@@ -9,13 +9,13 @@
 <include file="$(find mavros)/launch/px4.launch" />
 -->
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne04.bag" />
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne19.bag" />
 
 <node pkg="rosbag"
       name="play"
       type="play"
       output="screen"
-      args="--loop --pause $(arg bagfile_path) --rate=0.33" />
+      args="--loop --pause $(arg bagfile_path) --rate=0.999950 --start=0" />
 
 <node pkg="tf" 
       type="static_transform_publisher" 
@@ -33,6 +33,7 @@
       output="screen">
 
       <param name="debug_mode"        value = "false"        />
+      <param name="ndt_step_size"     value = "1.5"        />
       <remap from="~/imu"             to="/mavros/imu/data" />
       <remap from="~/velodyne_points" to="/velodyne_points" />
       <remap from="~/odom" to="/velodyne_odom" />
@@ -45,6 +46,16 @@
                          
       <remap from="~odom" to="/velodyne_odom"/>
       <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+</node>
+
+<node name="pose_graph_visualization"
+      pkg ="pose_graph_visualization"
+      type="pose_graph_visualization_node"
+      output="screen" >
+                         
+      <remap from="~pose_graph" to="/velodyne_odom_node/pose_graph"/>
+      <param name="debug_mode"  value = "false"        />
+      <param name="axis_length" value = "0.33"        />
 </node>
 
 </launch>

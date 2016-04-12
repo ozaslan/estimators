@@ -12,7 +12,7 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 rosbuild_init()
 
 FIND_PACKAGE(GTSAM REQUIRED)
-FIND_PACKAGE(PCL 1.5 REQUIRED)
+FIND_PACKAGE(PCL 1.7.2 REQUIRED)
 
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})

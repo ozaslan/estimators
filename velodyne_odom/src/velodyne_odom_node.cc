@@ -7,29 +7,37 @@
 #include <nav_msgs/Odometry.h>
 
 #include "utils.hh"
+#include "pose_graph_visualization/PoseGraph.h"
 /*
  */
 
 ros::Subscriber velodyne_subs;
 ros::Subscriber imu_subs;
 ros::Publisher  map_publ;
+ros::Publisher  local_map_publ;
 ros::Publisher  odom_publ;
 ros::Publisher  aligned_pc_publ;
 ros::Publisher  keyframe_pc_publ;
 ros::Publisher  keyframe_poses_publ;
+ros::Publisher  pose_graph_publ;
 
-sensor_msgs::Imu imu_msg;
+vector<sensor_msgs::Imu> imu_msgs;
 nav_msgs::Odometry odom_msg;
-sensor_msgs::PointCloud2 map_msg, velodyne_msg, aligned_pc_msg, keyframe_pc_msg;
+sensor_msgs::PointCloud2 map_msg, local_map_msg, velodyne_msg, aligned_pc_msg, keyframe_pc_msg;
 geometry_msgs::PoseArray keyframe_poses_msg;
+pose_graph_visualization::PoseGraph pose_graph_msg;
 
 void process_inputs(const ros::NodeHandle &n);
 int  setup_messaging_interface(ros::NodeHandle &n);
 void velodyne_callback(const sensor_msgs::PointCloud2 &msg);
 void imu_callback(const sensor_msgs::Imu &msg);
 int  publish_map();
+int  publish_local_map();
 int  publish_odom();
 int  publish_pose_array();
+int  publish_pose_graph();
+
+double imu_velo_time_offset = 0.15; // sec : imu leading
 
 bool debug_mode;
 
@@ -52,7 +60,7 @@ void process_inputs(const ros::NodeHandle &n)
 {
 	n.param("debug_mode", debug_mode, true);
 
-	//n.param("grid_cols"		  , ofe_params.grid_cols, 29);
+	//n.param("ndt_step_size", _params.ndt_step_size, 0.1);
 
 	ROS_INFO(" ---------- VELODYNE ODOM NODE ------------");
 	ROS_INFO("[debug_mode] ---------- : [%s]"      , debug_mode ? "TRUE" : "FALSE");
@@ -70,15 +78,18 @@ int setup_messaging_interface(ros::NodeHandle &n)
 		ROS_INFO(" --- Publishing : ~odom");
 		ROS_INFO(" --- Publishing : ~aligned_pc");
 		ROS_INFO(" --- Publishing : ~keyframe_pc");
-		ROS_INFO(" --- Publishing : ~keyframe_poses");
+		//ROS_INFO(" --- Publishing : ~keyframe_poses");
+		ROS_INFO(" --- Publishing : ~pose_graph");
 	}
 
 	imu_subs		= n.subscribe("imu", 10, imu_callback, ros::TransportHints().tcpNoDelay());
 	velodyne_subs	= n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
 	map_publ		= n.advertise<sensor_msgs::PointCloud2>("map", 10);
+	local_map_publ	= n.advertise<sensor_msgs::PointCloud2>("local_map", 10);
 	aligned_pc_publ	 = n.advertise<sensor_msgs::PointCloud2>("aligned_pc", 10);
 	keyframe_pc_publ = n.advertise<sensor_msgs::PointCloud2>("keyframe_pc", 10);
-	keyframe_poses_publ = n.advertise<geometry_msgs::PoseArray>("keyframe_poses", 10);
+	//keyframe_poses_publ = n.advertise<geometry_msgs::PoseArray>("keyframe_poses", 10);
+	pose_graph_publ = n.advertise<pose_graph_visualization::PoseGraph>("pose_graph", 10);
 	odom_publ		= n.advertise<nav_msgs::Odometry>("odom", 10);
 
 	return 0;
@@ -152,17 +163,8 @@ int  publish_pose_array(){
 
 	keyframe_poses_msg.poses.resize(keyframe_poses.size());
 
-	Eigen::Vector4d quat;
-
 	for(int i = 0 ; i < (int)keyframe_poses.size() ; i++){
-		keyframe_poses_msg.poses[i].position.x = keyframe_poses[i](0, 3);
-		keyframe_poses_msg.poses[i].position.y = keyframe_poses[i](1, 3);
-		keyframe_poses_msg.poses[i].position.z = keyframe_poses[i](2, 3);
-		quat = utils::trans::dcm2quat(keyframe_poses[i].topLeftCorner<3, 3>());
-		keyframe_poses_msg.poses[i].orientation.w = quat(0);
-		keyframe_poses_msg.poses[i].orientation.x = quat(1);
-		keyframe_poses_msg.poses[i].orientation.y = quat(2);
-		keyframe_poses_msg.poses[i].orientation.z = quat(3);
+    keyframe_poses_msg.poses[i] = utils::trans::se32odom(keyframe_poses[i]).pose.pose;
 	}
 
 	keyframe_poses_publ.publish(keyframe_poses_msg);
@@ -188,12 +190,55 @@ int publish_map()
 	return 0;
 }
 
+int publish_local_map()
+{
+	if(debug_mode)
+		ROS_INFO("VELODYNE ODOM NODE : Published local_map PC to ~local_map");
+
+	static int seq = 0;
+
+	pcl::toROSMsg(*velodyne_odom.get_local_map(), local_map_msg);
+
+	local_map_msg.header.seq = seq++;
+	local_map_msg.header.stamp = ros::Time::now();
+	local_map_msg.header.frame_id = "world";
+	local_map_publ.publish(local_map_msg);
+
+	return 0;
+}
+
+
+int publish_pose_graph(){
+  const vector<pair<int, int> > pose_graph_edges = velodyne_odom.get_pose_graph_edges();
+  const vector<Eigen::Matrix4d> keyframe_poses   = velodyne_odom.get_keyframe_poses();
+
+  pose_graph_msg.poses.resize(keyframe_poses.size());
+  pose_graph_msg.edges.resize(2 * pose_graph_edges.size());
+
+  pose_graph_msg.header.seq++;
+  pose_graph_msg.header.stamp = ros::Time::now();
+  pose_graph_msg.header.frame_id = "world";
+
+	for(int i = 0 ; i < (int)keyframe_poses.size() ; i++){
+		pose_graph_msg.poses[i] = utils::trans::se32odom(keyframe_poses[i]).pose.pose;
+	}
+ 
+	for(int i = 0 ; i < (int)pose_graph_edges.size() ; i++){
+    pose_graph_msg.edges[2 * i + 0] = pose_graph_edges[i].first;
+    pose_graph_msg.edges[2 * i + 1] = pose_graph_edges[i].second;
+  }
+
+  pose_graph_publ.publish(pose_graph_msg);
+
+  return 0;
+}
+
 void imu_callback(const sensor_msgs::Imu &msg)
 {
 	if(debug_mode)
 		ROS_INFO("VELODYNE ODOM NODE : Got IMU message!");
 
-	imu_msg = msg;
+	imu_msgs.push_back(msg);
 }
 
 void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
@@ -204,11 +249,30 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 	if(debug_mode)
 		ROS_INFO("VELODYNE ODOM NODE : Got Velodyne message!");
 
-	dR_imu = utils::trans::imu2dcm(imu_msg).inverse() * prev_imu_dcm;
-	//cout << "rpy = " << utils::trans::dcm2rpy(dR_imu) << endl;
-	//init_pose.topLeftCorner<3, 3>() = dR_imu * init_pose.topLeftCorner<3, 3>();
+	//dR_imu = utils::trans::imu2dcm(imu_msg).inverse() * prev_imu_dcm;
+
+	if(imu_msgs.size() == 0)
+		return;
 
 	velodyne_msg = msg;
+
+	double best_time_offset = 9999;
+	int best_time_offset_ind = -1;
+	for(int i = 0 ; i < (int)imu_msgs.size() ; i++){
+		double dt = std::fabs((imu_msgs[i].header.stamp - velodyne_msg.header.stamp).toSec() + imu_velo_time_offset); 
+		if(best_time_offset > dt){
+			best_time_offset = dt;
+			best_time_offset_ind = i;
+		}
+	}
+
+	if(best_time_offset_ind >= 0){
+		Eigen::Vector3d rpy_imu = utils::trans::dcm2rpy(utils::trans::imu2dcm(imu_msgs[best_time_offset_ind]));
+		Eigen::Vector3d rpy_init_pose = utils::trans::dcm2rpy(init_pose.topLeftCorner<3, 3>());
+		rpy_init_pose(0) = rpy_imu(0);
+		rpy_init_pose(1) = rpy_imu(1);
+		init_pose.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy_init_pose);
+	}
 
 	velodyne_odom.push_pc(msg);
 	if(velodyne_odom.align(init_pose) == 0)
@@ -216,9 +280,15 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 
 	publish_odom();
 	publish_map();
+	publish_local_map();
 	publish_aligned_pc();
 	publish_keyframe_pc();
-	publish_pose_array();
-	prev_imu_dcm = utils::trans::imu2dcm(imu_msg);
+	//publish_pose_array();
+	publish_pose_graph();
+
+	if(best_time_offset_ind >= 0 ){
+		prev_imu_dcm = utils::trans::imu2dcm(imu_msgs[best_time_offset_ind]);
+		imu_msgs.erase(imu_msgs.begin(), imu_msgs.begin() + best_time_offset_ind);
+	}
 }
 

@@ -13,6 +13,7 @@
   <depend package="geometry_msgs"/>
   <depend package="mavros"/>
   <depend package="utils"/>
+  <depend package="pose_graph_visualization"/>
 
 </package>
 
