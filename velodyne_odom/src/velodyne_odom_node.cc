@@ -297,26 +297,28 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 		init_pose.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy_init_pose);
 	}
 
+	/*
 	if(init_odom_msg.pose.covariance[0] != 0){
 		init_pose(0, 3) = init_odom_msg.pose.pose.position.x;
 		init_pose(1, 3) = init_odom_msg.pose.pose.position.y;
 		init_pose(2, 3) = init_odom_msg.pose.pose.position.z;
 	}
+	*/
 
-	cout << "Init Pose : " << endl << init_pose << endl;
+	//cout << "Init Pose : " << endl << init_pose << endl;
 
 	velodyne_odom.push_pc(msg);
 	if(velodyne_odom.align(init_pose) == 0){
 		init_pose = velodyne_odom.get_pose();
 		publish_odom();
-
-		publish_map();
-		publish_local_map();
-		publish_aligned_pc();
-		publish_keyframe_pc();
-		//publish_pose_array();
-		publish_pose_graph();
 	}
+	publish_map();
+	publish_local_map();
+	publish_aligned_pc();
+	publish_keyframe_pc();
+	//publish_pose_array();
+	publish_pose_graph();
+
 	if(best_time_offset_ind >= 0 ){
 		prev_imu_dcm = utils::trans::imu2dcm(imu_msgs[best_time_offset_ind]);
 		imu_msgs.erase(imu_msgs.begin(), imu_msgs.begin() + best_time_offset_ind);

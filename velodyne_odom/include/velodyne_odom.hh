@@ -70,20 +70,20 @@ public:
 		double init_keyframe_trans_thres;
 		double init_keyframe_rot_thres;
 	
-		VelodyneOdomParams() :	voxel_leaf_size({0.10, 0.10, 0.10}),
-								ndt_eps(0.05), 
+		VelodyneOdomParams() :	voxel_leaf_size({0.15, 0.15, 0.15}),
+								ndt_eps(0.01), 
 								ndt_step_size(0.1), 
 								ndt_res(1.0), 
-								ndt_max_iter(5),
-								ndt_fitness_score_thres(120.0),
+								ndt_max_iter(7),
+								ndt_fitness_score_thres(1200.0),
 								batch_ndt_eps(0.01), 
 								batch_ndt_step_size(0.1), 
 								batch_ndt_res( 1.0), 
 								batch_ndt_max_iter ( 50),
-								init_keyframe_trans_thres(3.0), // m
+								init_keyframe_trans_thres(1.00), // m
 								init_keyframe_rot_thres(DEG2RAD(10)), // radians
-								local_map_dims({20, 20, 20}), // m
-								local_map_max_points(25000) 
+								local_map_dims({40, 40, 40}), // m
+								local_map_max_points(7000) 
 								{}
 		int print();
 	};

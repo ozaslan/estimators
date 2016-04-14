@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Map1/Autocompute Value Bounds1
+        - /Meas. Odom. Vis.1
       Splitter Ratio: 0.5
     Tree Height: 347
   - Class: rviz/Selection
@@ -51,8 +52,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 10.7063
-        Min Value: -0.725586
+        Max Value: 6.50438
+        Min Value: -5.21525
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -60,7 +61,7 @@ Visualization Manager:
       Color: 0; 0; 127
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -76,7 +77,7 @@ Visualization Manager:
       Topic: /velodyne_odom_node/map
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -100,7 +101,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.1
+      Size (m): 0.05
       Style: Flat Squares
       Topic: /velodyne_odom_node/local_map
       Use Fixed Frame: true
@@ -147,7 +148,7 @@ Visualization Manager:
       Color: 0; 0; 0
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -158,12 +159,12 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.03
+      Size (m): 0.05
       Style: Flat Squares
       Topic: /velodyne_odom_node/aligned_pc
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz/Group
       Displays:
         - Class: rviz/Marker
@@ -171,7 +172,7 @@ Visualization Manager:
           Marker Topic: /control_odom_visualization/cov
           Name: Covariance
           Namespaces:
-            cov: true
+            {}
           Queue Size: 100
           Value: true
         - Class: rviz/Marker
@@ -179,7 +180,7 @@ Visualization Manager:
           Marker Topic: /control_odom_visualization/mesh
           Name: Robot
           Namespaces:
-            odom_visualization: true
+            {}
           Queue Size: 100
           Value: true
         - Class: rviz/Marker
@@ -187,7 +188,7 @@ Visualization Manager:
           Marker Topic: /control_odom_visualization/vel
           Name: Velocity
           Namespaces:
-            vel: true
+            {}
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -218,7 +219,7 @@ Visualization Manager:
           Shape: Arrow
           Topic: /control_odom_visualization/pose2
           Value: true
-      Enabled: true
+      Enabled: false
       Name: Control Odom. Vis.
     - Class: rviz/Group
       Displays:
@@ -227,7 +228,7 @@ Visualization Manager:
           Marker Topic: /velodyne_odom_visualization/vel
           Name: Velocity
           Namespaces:
-            {}
+            vel: true
           Queue Size: 100
           Value: true
         - Class: rviz/Marker
@@ -235,7 +236,7 @@ Visualization Manager:
           Marker Topic: /velodyne_odom_visualization/mesh
           Name: Robot
           Namespaces:
-            {}
+            odom_visualization: true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -253,13 +254,13 @@ Visualization Manager:
           Topic: /velodyne_odom_visualization/path
           Value: true
         - Class: rviz/Marker
-          Enabled: true
+          Enabled: false
           Marker Topic: /velodyne_odom_visualization/cov
           Name: Covariance
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Alpha: 1
           Axes Length: 1
           Axes Radius: 0.1
@@ -274,7 +275,7 @@ Visualization Manager:
           Shape: Axes
           Topic: /velodyne_odom_visualization/pose2
           Value: true
-      Enabled: false
+      Enabled: true
       Name: Meas. Odom. Vis.
     - Class: rviz/Group
       Displays:
@@ -283,7 +284,7 @@ Visualization Manager:
           Marker Topic: /pose_graph_visualization/pose_graph/poses
           Name: Poses
           Namespaces:
-            {}
+            pose_graph/edges: true
           Queue Size: 100
           Value: true
         - Class: rviz/Marker
@@ -291,10 +292,10 @@ Visualization Manager:
           Marker Topic: /pose_graph_visualization/pose_graph/edges
           Name: Edges
           Namespaces:
-            {}
+            pose_graph/edges: true
           Queue Size: 100
           Value: true
-      Enabled: false
+      Enabled: true
       Name: PoseGraph
     - Class: rviz/Group
       Displays:
@@ -395,22 +396,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 59.6661
+      Distance: 13.053
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 4.50705
-        Y: 0.856894
-        Z: -2.27616
+        X: 2.41434
+        Y: -0.809714
+        Z: 1.31623
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 1.0298
+      Pitch: 0.853111
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.79599
+      Yaw: 5.11095
     Saved: ~
 Window Geometry:
   Displays:

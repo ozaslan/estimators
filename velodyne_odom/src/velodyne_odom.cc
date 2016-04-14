@@ -101,6 +101,7 @@ double VelodyneOdom::_pose_distance(const Eigen::Matrix4d &pose1, const Eigen::M
 bool VelodyneOdom::_push_new_keyframe_required(const Eigen::Matrix4d &curr_pose, int key_frame_ind){
 	ASSERT(key_frame_ind < (int)_keyframes.size(), "'key_frame_ind < _keyframes.size()' should hold ");
 
+	//cout << "Need to push new keyframe ? : " << _pose_distance(curr_pose, _keyframe_poses[key_frame_ind]) << endl;
 	return _pose_distance(curr_pose, _keyframe_poses[key_frame_ind]) >= 1.0;
 }
 
@@ -159,35 +160,54 @@ int VelodyneOdom::_trim_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc, cons
 int VelodyneOdom::_build_local_map(const Eigen::Matrix4d &curr_pose){
 	// Generate the sorted distances vector
 	_find_pose_keyframes_distances(curr_pose);
+	
+	/*
+	cout << "-------------------------------------------------" << endl;
+	cout << "Pose-Keyframe Distances " << endl;
+	for(int i = 0 ; i < (int) _pose_keyframes_distances.size() ; i++){
+		cout << "\t" << _pose_keyframes_distances[i].first << " - " << _pose_keyframes_distances[i].second << endl;
+	}
+
+	cout << "Previous Pose-Keyframe Distances " << endl;
+	for(int i = 0 ; i < (int) _prev_pose_keyframes_distances.size() ; i++){
+		cout << "\t" << _prev_pose_keyframes_distances[i].first << " - " << _prev_pose_keyframes_distances[i].second << endl;
+	}
+	*/
 
 	// If the first 5 keyframes are the same between the current and 
 	// the previous sorted list, do not rebuild '_local_map'
 	if(_prev_pose_keyframes_distances.size() == _pose_keyframes_distances.size()){
 		bool diff_exists = false;
-		for(int i = 0 ; i < 5 && i < (int)_pose_keyframes_distances.size() ; i++)
+		for(int i = 0 ; i < 3 && i < (int)_pose_keyframes_distances.size() ; i++)
 			diff_exists |= _prev_pose_keyframes_distances[i].first != _pose_keyframes_distances[i].first;
-		if(diff_exists == false)
+		if(diff_exists == false){
+			//cout << "There is no difference in pose-keyframe distances. No need to rebuild the local map" << endl;
 			return 0;
+		}
 	}
+
+	//cout << "Need to rebuild the local map" << endl;
 
 	_local_map->clear();
 
 	for(int i = 0 ; i < (int)_pose_keyframes_distances.size() ; i++){
+		int ind = _pose_keyframes_distances[i].first;
+
+		// Trim the keyframe point cloud before adding to the local map.
+		pcl::PointCloud<pcl::PointXYZ>::Ptr trimmed_keyframe_pointcloud = _keyframes[ind]->makeShared();
+		_trim_pointcloud(trimmed_keyframe_pointcloud, curr_pose.topRightCorner<3, 1>(), _local_map_bbox);
+		*_local_map += *trimmed_keyframe_pointcloud;
+
 		if(_local_map->points.size() > _params.local_map_max_points){
-			_trim_pointcloud(_local_map, curr_pose.topRightCorner<3, 1>(), _local_map_bbox);
 			_voxel_filter.setInputCloud(_local_map);
 			_voxel_filter.filter(*_local_map);
-		} else {
-			int ind = _pose_keyframes_distances[i].first;
-			*_local_map += *_keyframes[ind];
+			// If local map has too many points even after filtering, stop expanding it
+			if(_local_map->points.size() > _params.local_map_max_points)
+				break;
 		}
 	}
 
-	if(_local_map->points.size() > _params.local_map_max_points){
-		_trim_pointcloud(_local_map, curr_pose.topRightCorner<3, 1>(), _local_map_bbox);
-		_voxel_filter.setInputCloud(_local_map);
-		_voxel_filter.filter(*_local_map);
-	}
+	//cout << "Size of the new local map : <" << _local_map->points.size() << ">" << endl;
 
 	_ndt.setInputTarget(_local_map);
 	_prev_pose_keyframes_distances = _pose_keyframes_distances;
@@ -248,24 +268,32 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 		_gtsam_graph_with_prior.add(gtsam::PriorFactor<gtsam::Pose3>(0, gtsam::Pose3(_keyframe_poses[0]), _gtsam_prior_model));
 	}
 
-	// utils::Timer timer(true, "align-");
-	// timer.tic();
-	// timer.toc("1"); timer.tic();
+	utils::Timer timer(true, "align-");
+	timer.tic();
+	timer.toc("1"); timer.tic();
 
 	// Downsample the input point cloud using voxel grids
 	// ### remember that we were using the approximate grid filter before!!!
 	_voxel_filter.setInputCloud(_pc);
 	_voxel_filter.filter(*_filtered_pc);
 
+	timer.toc("2"); timer.tic();
 	// Find the closest keyframes to build '_local_map' with respect to 
 	// which the odometry is calculated
 	_build_local_map(init_pose);
 
+	timer.toc("3"); timer.tic();
 	// Align the input point cloud to the keyframe
 	_ndt.setInputSource(_filtered_pc);
 	_ndt.align(*_aligned_pc, init_pose.cast<float>());
 
+	cout << "-- Size of the new local map : <" << _local_map->points.size() << ">" << endl;
+	timer.toc("4"); timer.tic();
+
 	double fitness_score = _ndt.getFitnessScore();
+
+	cout << "--- Fitness score : " << fitness_score << endl;
+	cout << "--- Has converged : " << (_ndt.hasConverged() ? "TRUE" : "FALSE") << endl;
 
 	if(_ndt.hasConverged() == false || fitness_score > _params.ndt_fitness_score_thres){
 		// Set covariance to some large matrix
@@ -284,13 +312,18 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	// Add new keyframes is alignment is succesful and current pose farther from 
 	// the keyframe than a threshold 
 	_curr_keyframe_ind = _find_closest_keyframe(_pc_pose);
+	
+	timer.toc("5"); timer.tic();
+	//cout << "curr keyframe ind = " << _curr_keyframe_ind << endl;
 	if(_push_new_keyframe_required(_pc_pose, _curr_keyframe_ind)){
 		// Use the original (non-downsampled point cloud)
+		
 		pcl::transformPointCloud(*_pc, *_aligned_pc, _ndt.getFinalTransformation());
 
 		// ### Do this is another thread
 		// ### You might want to use _map->points.reserve(...)
-		/*
+	
+		/*	
 		if(fitness_score < _params.ndt_fitness_score_thres / 10){
 			*_map += *_aligned_pc;
 			_voxel_filter.setInputCloud(_map);
@@ -300,6 +333,7 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 		// Add new keyframe
 		_keyframes.push_back(_aligned_pc->makeShared());
 		_keyframe_poses.push_back(_pc_pose);
+		timer.toc("4.1"); timer.tic();
 	}
 
 	return 0;
