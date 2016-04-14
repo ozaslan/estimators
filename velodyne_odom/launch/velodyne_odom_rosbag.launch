@@ -9,23 +9,24 @@
 <include file="$(find mavros)/launch/px4.launch" />
 -->
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne19.bag" />
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne11.bag" />
 
 <node pkg="rosbag"
       name="play"
       type="play"
       output="screen"
-      args="--loop --pause $(arg bagfile_path) --rate=0.999950 --start=0" />
+      args=" --pause $(arg bagfile_path) --rate=0.99950 --start=0" />
 
 <node pkg="tf" 
       type="static_transform_publisher" 
       name="fcu_link_publisher" 
       args="0 0 0 0 0 0 fcu velodyne 100" />
-
+<!--
 <node pkg ="rviz"
       name="rviz"
       type="rviz"
       args="-d $(find velodyne_odom)/rviz/velodyne_odom.rviz"/>
+-->
 
 <node pkg ="velodyne_odom"
       name="velodyne_odom_node"
@@ -33,19 +34,28 @@
       output="screen">
 
       <param name="debug_mode"        value = "false"        />
-      <param name="ndt_step_size"     value = "1.5"        />
       <remap from="~/imu"             to="/mavros/imu/data" />
       <remap from="~/velodyne_points" to="/velodyne_points" />
       <remap from="~/odom" to="/velodyne_odom" />
+      <remap from="~/init_odom" to="/control_odom" />
 </node>
 
-<node name="odom_visualization"
+<node name="velodyne_odom_visualization"
       pkg ="odom_visualization"
       type="odom_visualization_node"
       output="screen" >
                          
       <remap from="~odom" to="/velodyne_odom"/>
       <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+</node>
+
+<node name="control_odom_visualization"
+      pkg ="odom_visualization"
+      type="odom_visualization_node"
+      output="screen" >
+                         
+      <remap from="~odom" to="/control_odom"/>
+      <rosparam file="$(find odom_visualization)/config/config02.yaml" />
 </node>
 
 <node name="pose_graph_visualization"
@@ -56,6 +66,16 @@
       <remap from="~pose_graph" to="/velodyne_odom_node/pose_graph"/>
       <param name="debug_mode"  value = "false"        />
       <param name="axis_length" value = "0.33"        />
+</node>
+
+<node name="quadrotor_ukf"
+      pkg ="quadrotor_ukf_lite"
+      type="quadrotor_ukf"
+      output="screen" >
+                         
+      <remap from="~imu" to="/mavros/imu/data"/>
+      <remap from="~odom_slam" to="/velodyne_odom"/>
+      <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
 </node>
 
 </launch>

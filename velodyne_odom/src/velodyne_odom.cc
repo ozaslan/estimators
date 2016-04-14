@@ -233,6 +233,8 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	// Find the closest keyframe with respect to which the odometry is calculated
 	_curr_keyframe_ind = _find_closest_keyframe(init_pose);
 
+	cout << "Curr Keyframe Index : " << _curr_keyframe_ind << endl;
+
 	timer.toc("1.1"); timer.tic();
 	// Align the input point cloud to the keyframe
 	_ndt.setInputSource(_filtered_pc);
@@ -250,8 +252,19 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 
 	timer.toc("1.3"); timer.tic();
 	// Check if the alignment result is sufficiently good
-	//std::cout << "Normal Distributions Transform has converged:" << _ndt.hasConverged ()
-	//		  << " score: " << _ndt.getFitnessScore () << std::endl;
+	std::cout << "Normal Distributions Transform has converged:" << _ndt.hasConverged ()
+			  << " score: " << _ndt.getFitnessScore () << std::endl;
+
+	if(_ndt.hasConverged() == false || _ndt.getFitnessScore() > 100.0){
+		_cov = Eigen::Matrix6d::Identity() * 1e12;
+		cout << "RETURNING -1" << endl;
+		return -1;
+	} else {	
+		_cov = Eigen::Matrix6d::Identity();
+		double fitness_score = _ndt.getFitnessScore();
+		_cov.topLeftCorner<3, 3>() *= fitness_score * 1e-2;
+		_cov.bottomRightCorner<3, 3>() *= fitness_score * 1e-3;
+	}
 
 	// Record the final robot state
 	_pc_pose = _ndt.getFinalTransformation().cast<double>();

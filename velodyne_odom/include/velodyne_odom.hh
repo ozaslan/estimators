@@ -24,6 +24,8 @@
 #include <gtsam/nonlinear/GaussNewtonOptimizer.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 
+#include <utils.hh>
+
 /*
 	This class uses PCL functions to align point cloud from Velodyne 
 	range sensor. This also accumulates the previous point cloud data
@@ -62,10 +64,10 @@ public:
 		double init_keyframe_rot_thres;
 	
 		VelodyneOdomParams() :	approximate_voxel_leaf_size({0.5, 0.5, 0.5}),
-								ndt_eps(0.01), 
+								ndt_eps(0.05), 
 								ndt_step_size(0.1), 
 								ndt_res(1.0), 
-								ndt_max_iter(7),
+								ndt_max_iter(5),
 								batch_ndt_eps(0.01), 
 								batch_ndt_step_size(0.1), 
 								batch_ndt_res( 1.0), 
@@ -108,6 +110,9 @@ private:
 	gtsam::noiseModel::Diagonal::shared_ptr _gtsam_prior_model;
 
 	std::vector<std::pair<int, int> > _pose_graph_edges;
+
+	// An unrealistic replacement for covariance.
+	Eigen::Matrix6d _cov;
 
 	// This flag is set to 'true' when the batch optimization is still working.
 	bool _batch_optimizing;
@@ -174,6 +179,7 @@ public:
 	const pcl::PointCloud<pcl::PointXYZ>::Ptr get_keyframe_pc(){ return _keyframes[_curr_keyframe_ind];}
 	const std::vector<Eigen::Matrix4d> & get_keyframe_poses(){ return _keyframe_poses; }
 	const std::vector<std::pair<int, int> > get_pose_graph_edges(){ return _pose_graph_edges;}
+	Eigen::Matrix6d get_covariance(){ return _cov; }
 };
 
 #endif
