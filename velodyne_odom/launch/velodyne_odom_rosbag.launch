@@ -9,7 +9,7 @@
 <include file="$(find mavros)/launch/px4.launch" />
 -->
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne11.bag" />
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne19.bag" />
 
 <node pkg="rosbag"
       name="play"

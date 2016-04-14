@@ -218,7 +218,8 @@ int publish_local_map()
 
 
 int publish_pose_graph(){
-  const vector<pair<int, int> > pose_graph_edges = velodyne_odom.get_pose_graph_edges();
+
+  const vector<pair<int, int> > pose_graph_edges = velodyne_odom.get_keyframe_connectivity();
   const vector<Eigen::Matrix4d> keyframe_poses   = velodyne_odom.get_keyframe_poses();
 
   pose_graph_msg.poses.resize(keyframe_poses.size());
