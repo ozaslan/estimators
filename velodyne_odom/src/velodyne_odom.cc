@@ -76,7 +76,7 @@ void VelodyneOdom::_initialize(){
 	_batch_ndt.setMaximumIterations (_params.batch_ndt_max_iter);
 
 	_gtsam_prior_model = gtsam::noiseModel::Diagonal::Variances((gtsam::Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
-	_params.print();
+	//_params.print();
 }
 
 VelodyneOdom::VelodyneOdom(){
@@ -285,6 +285,7 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	timer.toc("3"); timer.tic();
 	// Align the input point cloud to the keyframe
 	_ndt.setInputSource(_filtered_pc);
+	timer.toc("3.1"); timer.tic();
 	_ndt.align(*_aligned_pc, init_pose.cast<float>());
 
 	cout << "-- Size of the new local map : <" << _local_map->points.size() << ">" << endl;
@@ -333,7 +334,7 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 		// Add new keyframe
 		_keyframes.push_back(_aligned_pc->makeShared());
 		_keyframe_poses.push_back(_pc_pose);
-		timer.toc("4.1"); timer.tic();
+		timer.toc("5.1"); timer.tic();
 	}
 
 	return 0;

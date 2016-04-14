@@ -101,7 +101,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05
+      Size (m): 0.07
       Style: Flat Squares
       Topic: /velodyne_odom_node/local_map
       Use Fixed Frame: true
@@ -159,7 +159,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05
+      Size (m): 0.07
       Style: Flat Squares
       Topic: /velodyne_odom_node/aligned_pc
       Use Fixed Frame: true
@@ -396,22 +396,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 13.053
+      Distance: 47.9828
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.41434
-        Y: -0.809714
-        Z: 1.31623
+        X: 0.562204
+        Y: 10.8068
+        Z: 2.37959
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.853111
+      Pitch: 0.606398
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.11095
+      Yaw: 3.01368
     Saved: ~
 Window Geometry:
   Displays:
@@ -431,5 +431,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1553
-  X: 1967
+  X: 47
   Y: 24

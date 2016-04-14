@@ -15,7 +15,7 @@
       name="play"
       type="play"
       output="screen"
-      args=" --pause $(arg bagfile_path) --rate=0.3399 --start=0" />
+      args=" --pause $(arg bagfile_path) --rate=0.6699 --start=0" />
 
 <node pkg="tf" 
       type="static_transform_publisher" 
@@ -33,6 +33,7 @@
       type="velodyne_odom_node"
       output="screen">
 
+      <rosparam file="$(find velodyne_odom)/config/velodyne_odom_params.yaml" />
       <param name="debug_mode"        value = "false"        />
       <remap from="~/imu"             to="/mavros/imu/data" />
       <remap from="~/velodyne_points" to="/velodyne_points" />
