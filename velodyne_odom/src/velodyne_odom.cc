@@ -157,6 +157,7 @@ int VelodyneOdom::_trim_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc, cons
 	return pc->points.size();
 }
 
+// ### MUST DO : Thin the map if the number of point is more than the threshold
 int VelodyneOdom::_build_local_map(const Eigen::Matrix4d &curr_pose){
 	// Generate the sorted distances vector
 	_find_pose_keyframes_distances(curr_pose);
@@ -276,6 +277,7 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	// ### remember that we were using the approximate grid filter before!!!
 	_voxel_filter.setInputCloud(_pc);
 	_voxel_filter.filter(*_filtered_pc);
+	_trim_pointcloud(_filtered_pc, Eigen::Vector3d(0, 0, 0), _local_map_bbox);
 
 	timer.toc("2"); timer.tic();
 	// Find the closest keyframes to build '_local_map' with respect to 

@@ -5,9 +5,9 @@ voxel_leaf_size:
 # Normal distribution transform (NDT) parameters for odometry.
 ndt:
  eps: 0.01
- step_size: 0.1
+ step_size: 0.5
  res: 1.0
- max_iter: 77
+ max_iter: 55
  fitness_score_thres: 1200
 
 # NDT params for batch optimization             
@@ -18,7 +18,7 @@ batch_ndt:
  max_iter: 10
 
 # Maximum number of points for '_local_map'.    
-local_map_max_points: 7000
+local_map_max_points: 3000
 
 # Dimensions of the bounding box '_local_map' centered at the current pose. 
 local_map_dims:
@@ -27,5 +27,5 @@ local_map_dims:
  z: 40
 
 init_keyframe_thres:
- trans: 1.0
+ trans: 2.0
  rot: 0.1744 # ~10 degrees (in radians)

@@ -9,13 +9,18 @@
 <include file="$(find mavros)/launch/px4.launch" />
 -->
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne15.bag" />
+<!--
+	+ 17.bag is very fast dataset. I need to increase # of iters and the bbox dims.
+	+ 19.bag flies in wide openings. It loses track when no objects around.
+-->
+
+<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne19.bag" />
 
 <node pkg="rosbag"
       name="play"
       type="play"
       output="screen"
-      args=" --pause $(arg bagfile_path) --rate=0.6699 --start=0" />
+      args=" --pause $(arg bagfile_path) --rate=0.99 --start=0" />
 
 <node pkg="tf" 
       type="static_transform_publisher" 
