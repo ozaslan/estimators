@@ -4,6 +4,7 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/Range.h>
 #include <nav_msgs/Odometry.h>
 
 #include "utils.hh"
@@ -14,6 +15,7 @@
 ros::Subscriber velodyne_subs;
 ros::Subscriber imu_subs;
 ros::Subscriber odom_subs;
+ros::Subscriber range_subs;
 ros::Publisher  map_publ;
 ros::Publisher  local_map_publ;
 ros::Publisher  odom_publ;
@@ -24,6 +26,7 @@ ros::Publisher  pose_graph_publ;
 vector<sensor_msgs::Imu> imu_msgs;
 nav_msgs::Odometry odom_msg, init_odom_msg;
 sensor_msgs::PointCloud2 map_msg, local_map_msg, velodyne_msg, aligned_pc_msg, keyframe_pc_msg;
+sensor_msgs::Range range_msg;
 pose_graph_visualization::PoseGraph pose_graph_msg;
 
 void process_inputs(const ros::NodeHandle &n);
@@ -31,10 +34,12 @@ int  setup_messaging_interface(ros::NodeHandle &n);
 void velodyne_callback(const sensor_msgs::PointCloud2 &msg);
 void imu_callback(const sensor_msgs::Imu &msg);
 void odom_callback(const nav_msgs::Odometry &msg);
+void range_callback(const sensor_msgs::Range &msg);
 int  publish_map();
 int  publish_local_map();
 int  publish_odom();
 int  publish_pose_graph();
+//int  publish_range();
 
 double imu_velo_time_offset = 0.15; // sec : imu leading
 
@@ -78,7 +83,22 @@ void process_inputs(const ros::NodeHandle &n)
 	n.param("local_map_dims/z", params.local_map_dims[2], 40.0);
 	n.param("init_keyframe_thres/trans", params.init_keyframe_trans_thres, 1.0);
 	n.param("init_keyframe_thres/rot"  , params.init_keyframe_rot_thres, DEG2RAD(10));
-	
+	n.param("method", params.method, string("NDT"));
+  n.param("icp/use_reciprocal_corr", params.icp_use_reciprocal_corr, true);
+  n.param("icp/max_corr_dist", params.icp_max_corr_dist, 1.5);
+  n.param("icp/max_iter", params.icp_max_iter, 50);
+  n.param("icp/trans_eps", params.icp_trans_eps, 1e-8);
+  n.param("icp/euc_fitness_eps", params.icp_euc_fitness_eps, 1.0);
+  n.param("nicp/use_reciprocal_corr", params.nicp_use_reciprocal_corr, true);
+  n.param("nicp/max_corr_dist", params.nicp_max_corr_dist, 1.5);
+  n.param("nicp/max_iter", params.nicp_max_iter, 50);
+  n.param("nicp/trans_eps", params.nicp_trans_eps, 1e-8);
+  n.param("nicp/euc_fitness_eps", params.nicp_euc_fitness_eps, 1.0);
+  n.param("gicp/max_iter", params.gicp_max_iter, 50);
+  n.param("gicp/rot_eps", params.gicp_rot_eps, 0.001);
+  n.param("gicp/corr_randomness", params.gicp_corr_randomness, 3);
+  n.param("gicp/max_corr_dist", params.gicp_max_corr_dist, 1.5);
+
 	ROS_INFO(" ---------- VELODYNE ODOM NODE ------------");
 	ROS_INFO("[debug_mode] ---------- : [%s]"      , debug_mode ? "TRUE" : "FALSE");
 	params.print();
@@ -94,6 +114,7 @@ int setup_messaging_interface(ros::NodeHandle &n)
 		ROS_INFO(" --- Listening  : ~velodyne_points");
 		ROS_INFO(" --- Listening  : ~imu_raw");
 		ROS_INFO(" --- Listening  : ~init_odom");
+		ROS_INFO(" --- Listening  : ~range");
 		ROS_INFO(" --- Publishing : ~map");
 		ROS_INFO(" --- Publishing : ~odom");
 		ROS_INFO(" --- Publishing : ~aligned_pc");
@@ -102,6 +123,7 @@ int setup_messaging_interface(ros::NodeHandle &n)
 	}
 
 	imu_subs		= n.subscribe("imu", 10, imu_callback, ros::TransportHints().tcpNoDelay());
+	range_subs		= n.subscribe("range", 10, range_callback, ros::TransportHints().tcpNoDelay());
 	odom_subs		= n.subscribe("init_odom", 10, odom_callback, ros::TransportHints().tcpNoDelay());
 	velodyne_subs	= n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
 	map_publ		= n.advertise<sensor_msgs::PointCloud2>("map", 10);
@@ -123,6 +145,9 @@ int publish_odom()
 
 	Eigen::Matrix4d pose = velodyne_odom.get_pose();
 
+  if(range_msg.range >= range_msg.min_range && range_msg.range <= range_msg.max_range)
+      pose(2, 3) =  range_msg.range * pose(2, 2);
+ 
 	odom_msg = utils::trans::se32odom(pose);
 
 	odom_msg.header.seq = seq++;
@@ -242,6 +267,14 @@ void imu_callback(const sensor_msgs::Imu &msg)
 	imu_msgs.push_back(msg);
 }
 
+void range_callback(const sensor_msgs::Range &msg)
+{
+	if(debug_mode)
+		ROS_INFO("VELODYNE ODOM NODE : Got Range message!");
+
+	range_msg = msg;
+}
+
 void odom_callback(const nav_msgs::Odometry &msg)
 {
 	if(debug_mode)
@@ -281,16 +314,24 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 	if(best_time_offset_ind >= 0){
 		Eigen::Vector3d rpy_imu = utils::trans::dcm2rpy(utils::trans::imu2dcm(imu_msgs[best_time_offset_ind]));
 		Eigen::Vector3d rpy_init_pose = utils::trans::dcm2rpy(init_pose.topLeftCorner<3, 3>());
+    static double prev_yaw = rpy_imu(2);
 		rpy_init_pose(0) = rpy_imu(0);
 		rpy_init_pose(1) = rpy_imu(1);
+    rpy_init_pose(2) += rpy_imu(2) - prev_yaw;
+    prev_yaw = rpy_imu(2);
 		init_pose.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy_init_pose);
 	}
 
-	if(init_odom_msg.pose.covariance[0] != 0){
+ 	if(init_odom_msg.pose.covariance[0] != 0){
 		init_pose(0, 3) = init_odom_msg.pose.pose.position.x;
 		init_pose(1, 3) = init_odom_msg.pose.pose.position.y;
 		init_pose(2, 3) = init_odom_msg.pose.pose.position.z;
 	}
+
+  if(range_msg.range >= range_msg.min_range && range_msg.range <= range_msg.max_range)
+    init_pose(2, 3) =  range_msg.range * init_pose(2, 2);
+
+  cout << "Range reading is : " << range_msg.range << endl;
 
 	velodyne_odom.push_pc(msg);
 	if(velodyne_odom.align(init_pose) == 0){
@@ -303,11 +344,12 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 	publish_aligned_pc();
 	publish_keyframe_pc();
 	publish_pose_graph();
+  //publish_range();
 
-	if(best_time_offset_ind >= 0 ){
+	if(best_time_offset_ind >= 0 )
 		prev_imu_dcm = utils::trans::imu2dcm(imu_msgs[best_time_offset_ind]);
-		imu_msgs.erase(imu_msgs.begin(), imu_msgs.begin() + best_time_offset_ind);
-	}
+	if(best_time_offset_ind >= 1 )
+		imu_msgs.erase(imu_msgs.begin(), imu_msgs.begin() + best_time_offset_ind - 1);
 
 	cout << "END OF VELODYNE CALLBACK" << endl; fflush(NULL);
 }

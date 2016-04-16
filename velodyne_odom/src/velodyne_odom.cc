@@ -1,5 +1,7 @@
 #include "velodyne_odom.hh"
 #include "utils.hh"
+#include <locale>
+#include <algorithm>
 
 /*
    -- Implement overlapping-spheres for loop closure
@@ -9,6 +11,9 @@
 using namespace std;
 
 int VelodyneOdom::VelodyneOdomParams::print(){
+	for(char& c: method)
+		c = std::toupper(c);
+
 	cout << "VelodyneOdomParams -----------------------" << endl;
 	cout << "\t voxel_leaf_size = [" << voxel_leaf_size[0] << ", " 
 		<< voxel_leaf_size[1] << ", "
@@ -17,17 +22,37 @@ int VelodyneOdom::VelodyneOdomParams::print(){
 		<< local_map_dims[1] << ", "
 		<< local_map_dims[2] << "]" << endl;
 	cout << "\t local_map_max_points = [" << local_map_max_points << "]" << endl;
-	cout << "\t ndt_eps --------------- = " << ndt_eps << endl;
-	cout << "\t ndt_res --------------- = " << ndt_res << endl;
-	cout << "\t ndt_max_iter ---------- = " << ndt_max_iter << endl;
-	cout << "\t ndt_step_size --------- = " << ndt_step_size << endl;
-	cout << "\t ndt_fitness_score_thres = " << ndt_fitness_score_thres << endl;
+	if(method == "NDT"){
+		cout << "\t ndt_eps --------------- = " << ndt_eps << endl;
+		cout << "\t ndt_res --------------- = " << ndt_res << endl;
+		cout << "\t ndt_max_iter ---------- = " << ndt_max_iter << endl;
+		cout << "\t ndt_step_size --------- = " << ndt_step_size << endl;
+		cout << "\t ndt_fitness_score_thres = " << ndt_fitness_score_thres << endl;
+	} else if(method == "ICP"){
+		cout << "\t icp_use_reciprocal_corr - = " << (icp_use_reciprocal_corr ? "TRUE" : "FALSE") << endl;
+		cout << "\t icp_max_corr_dist ------- = " << icp_max_corr_dist << endl;
+		cout << "\t icp_max_iter ------------ = " << icp_max_iter << endl;
+		cout << "\t icp_trans_eps ----------- = " << icp_trans_eps << endl;
+		cout << "\t icp_euc_fitness_eps ----- = " << icp_euc_fitness_eps << endl;
+	} else if(method == "NICP"){
+		cout << "\t nicp_use_reciprocal_corr - = " << (nicp_use_reciprocal_corr ? "TRUE" : "FALSE") << endl;
+		cout << "\t nicp_max_corr_dist ------- = " << nicp_max_corr_dist << endl;
+		cout << "\t nicp_max_iter ------------ = " << nicp_max_iter << endl;
+		cout << "\t nicp_trans_eps ----------- = " << nicp_trans_eps << endl;
+		cout << "\t nicp_euc_fitness_eps ----- = " << nicp_euc_fitness_eps << endl;
+	} else if(method == "GICP"){
+		cout << "\t gicp_rot_eps ------------- = " << gicp_rot_eps << endl;
+		cout << "\t gicp_corr_randomness ----- = " << gicp_corr_randomness << endl;
+		cout << "\t gicp_max_iter ------------ = " << gicp_max_iter << endl;
+	}
+
 	cout << "\t batch_ndt_eps --------- = " << batch_ndt_eps << endl;
 	cout << "\t batch_ndt_res --------- = " << batch_ndt_res << endl;
 	cout << "\t batch_ndt_max_iter ---- = " << batch_ndt_max_iter << endl;
 	cout << "\t batch_ndt_step_size --  = " << batch_ndt_step_size << endl;
 	cout << "\t init_keyframe_trans_thres = " << init_keyframe_trans_thres << endl;
 	cout << "\t init_keyframe_rot_thres - = " << init_keyframe_rot_thres << endl;
+	cout << "\t method ------------------ = " << method << endl;
 	cout << "------------------------------------------" << endl;
 	return 0;
 }
@@ -75,8 +100,40 @@ void VelodyneOdom::_initialize(){
 	_ndt.setMaximumIterations (_params.ndt_max_iter);
 	_batch_ndt.setMaximumIterations (_params.batch_ndt_max_iter);
 
+	// Set the max correspondence distance to 5cm (e.g., correspondences with higher distances will be ignored)
+	_icp.setMaxCorrespondenceDistance(_params.icp_max_corr_dist);
+	// Set the maximum number of iterations (criterion 1)
+	_icp.setMaximumIterations(_params.icp_max_iter);
+	// Set the transformation epsilon (criterion 2)
+	_icp.setTransformationEpsilon(_params.icp_trans_eps);
+	// Set the euclidean distance difference epsilon (criterion 3)
+	_icp.setEuclideanFitnessEpsilon(_params.icp_euc_fitness_eps);
+
+	// Set the max correspondence distance to 5cm (e.g., correspondences with higher distances will be ignored)
+	_nicp.setMaxCorrespondenceDistance(_params.nicp_max_corr_dist);
+	// Set the maximum number of iterations (criterion 1)
+	_nicp.setMaximumIterations(_params.nicp_max_iter);
+	// Set the transformation epsilon (criterion 2)
+	_nicp.setTransformationEpsilon(_params.nicp_trans_eps);
+	// Set the euclidean distance difference epsilon (criterion 3)
+	_nicp.setEuclideanFitnessEpsilon(_params.nicp_euc_fitness_eps);
+
+	// Set the rotation epsilon (maximum allowable difference between two consecutive rotations) 
+	// in order for an optimization to be considered as having converged to the final solution.
+	// ### _gicp.setRotationEpsilon(_params.gicp_rot_eps);
+	// Set the number of neighbors used when selecting a point neighbourhood to compute covariances.
+	/* ###
+	_gicp.setCorrespondenceRandomness(_params.gicp_rot_eps);
+	_gicp.setMaximumOptimizerIterations(_params.gicp_max_iter);
+	_gicp.setMaxCorrespondenceDistance(_params.gicp_max_corr_dist); 
+	*/
+
+	_methods_list = "<NDT>, <ICP>, <NICP>";
 	_gtsam_prior_model = gtsam::noiseModel::Diagonal::Variances((gtsam::Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
 	//_params.print();
+
+	for(char& c: _params.method)
+		c = std::toupper(c);
 }
 
 VelodyneOdom::VelodyneOdom(){
@@ -157,7 +214,6 @@ int VelodyneOdom::_trim_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc, cons
 	return pc->points.size();
 }
 
-// ### MUST DO : Thin the map if the number of point is more than the threshold
 int VelodyneOdom::_build_local_map(const Eigen::Matrix4d &curr_pose){
 	// Generate the sorted distances vector
 	_find_pose_keyframes_distances(curr_pose);
@@ -203,20 +259,31 @@ int VelodyneOdom::_build_local_map(const Eigen::Matrix4d &curr_pose){
 			_voxel_filter.setInputCloud(_local_map);
 			_voxel_filter.filter(*_local_map);
 			// If local map has too many points even after filtering, stop expanding it
-			if(_local_map->points.size() > _params.local_map_max_points)
+			if(_local_map->points.size() > _params.local_map_max_points){
+				_local_map->resize(_params.local_map_max_points);
 				break;
+			}
 		}
 	}
 
 	//cout << "Size of the new local map : <" << _local_map->points.size() << ">" << endl;
-
-	_ndt.setInputTarget(_local_map);
+	if(_params.method == "NDT"){
+		_ndt.setInputTarget(_local_map);
+	} else if(_params.method == "ICP"){
+		_icp.setInputTarget(_local_map);
+	} else if(_params.method == "NICP"){
+		_nicp.setInputTarget(_local_map);
+	/* } else if(_params.method == "GICP"){
+		_gicp.setInputTarget(_local_map); */
+	} else {
+		cout << "Methods implemented include " << _methods_list << endl;
+		exit(0);
+	}
 	_prev_pose_keyframes_distances = _pose_keyframes_distances;
 }
 
 int VelodyneOdom::_find_pose_keyframes_distances(const Eigen::Matrix4d &curr_pose){
 
-	// ### check if the closest keyframe set has changed. Otherwise do not rebuild the local map	
 	_pose_keyframes_distances.resize(_keyframes.size());
 	for(int i = _keyframe_poses.size() - 1; i >= 0 ; i--){
 		_pose_keyframes_distances[i].first = i;
@@ -285,20 +352,45 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	_build_local_map(init_pose);
 
 	timer.toc("3"); timer.tic();
+	
+	double fitness_score;
+	bool   has_converged;
 	// Align the input point cloud to the keyframe
-	_ndt.setInputSource(_filtered_pc);
-	timer.toc("3.1"); timer.tic();
-	_ndt.align(*_aligned_pc, init_pose.cast<float>());
+	if(_params.method == "NDT"){
+		_ndt.setInputSource(_filtered_pc);
+		_ndt.align(*_aligned_pc, init_pose.cast<float>());
+		fitness_score = _ndt.getFitnessScore();
+		has_converged = _ndt.hasConverged();
+	} else if(_params.method == "ICP"){
+		pcl::transformPointCloud(*_filtered_pc, *_filtered_pc, init_pose.cast<float>());
+		_icp.setInputSource(_filtered_pc);
+		_icp.align(*_aligned_pc);
+		fitness_score = _icp.getFitnessScore();
+		has_converged = _icp.hasConverged();
+	} else if(_params.method == "NICP"){
+		pcl::transformPointCloud(*_filtered_pc, *_filtered_pc, init_pose.cast<float>());
+		_nicp.setInputSource(_filtered_pc);
+		_nicp.align(*_aligned_pc);
+		fitness_score = _nicp.getFitnessScore();
+		has_converged = _nicp.hasConverged();
+	/* ### } else if(_params.method == "GICP"){
+		pcl::transformPointCloud(*_filtered_pc, *_filtered_pc, init_pose.cast<float>());
+		_gicp.setInputSource(_filtered_pc);
+		_gicp.align(*_aligned_pc);
+		fitness_score = _gicp.getFitnessScore();
+		has_converged = _gicp.hasConverged(); */
+	} else {
+		cout << "Methods implemented include " << _methods_list << endl;
+		exit(0);
+	}
 
 	cout << "-- Size of the new local map : <" << _local_map->points.size() << ">" << endl;
 	timer.toc("4"); timer.tic();
 
-	double fitness_score = _ndt.getFitnessScore();
-
 	cout << "--- Fitness score : " << fitness_score << endl;
-	cout << "--- Has converged : " << (_ndt.hasConverged() ? "TRUE" : "FALSE") << endl;
+	cout << "--- Has converged : " << (has_converged ? "TRUE" : "FALSE") << endl;
 
-	if(_ndt.hasConverged() == false || fitness_score > _params.ndt_fitness_score_thres){
+	if(has_converged == false || fitness_score > _params.ndt_fitness_score_thres){
 		// Set covariance to some large matrix
 		_cov = Eigen::Matrix6d::Identity() * 1e12;
 		return -1;
@@ -310,7 +402,34 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	_cov.bottomRightCorner<3, 3>() *= fitness_score * 1e-3;
 
 	// Record the final robot state
-	_pc_pose = _ndt.getFinalTransformation().cast<double>();
+	if(_params.method == "NDT"){
+		_pc_pose = _ndt.getFinalTransformation().cast<double>();
+	} else if(_params.method == "ICP"){
+		_pc_pose = _icp.getFinalTransformation().cast<double>() * init_pose;
+	} else if(_params.method == "NICP"){
+		_pc_pose = _nicp.getFinalTransformation().cast<double>() * init_pose;
+	/* ### } else if(_params.method == "GICP"){
+		_pc_pose = _gicp.getFinalTransformation().cast<double>() * init_pose; */
+	} else {
+		cout << "Methods implemented include " << _methods_list << endl;
+		exit(0);
+	}
+
+	// ### trusting the range measurement completely
+	_pc_pose(2, 3) = init_pose(2, 3);
+
+	{   // Trust the imu/control_odom and range measurement completely
+		Eigen::Vector3d rpy1 = utils::trans::dcm2rpy(_pc_pose.topLeftCorner<3, 3>());
+		Eigen::Vector3d rpy2 = utils::trans::dcm2rpy(init_pose.topLeftCorner<3, 3>());
+		rpy1(0) = rpy2(0);
+		rpy1(1) = rpy2(1);
+		_pc_pose.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy1);
+		_pc_pose(2, 3) = init_pose(2, 3);
+	}
+
+	cout << "dpose : " << endl << _nicp.getFinalTransformation() << endl;
+	cout << "Initial pose estiamte   : " << endl << init_pose << endl;
+	cout << "Resultant pose estiamte : " << endl << _pc_pose << endl;
 
 	// Add new keyframes is alignment is succesful and current pose farther from 
 	// the keyframe than a threshold 
@@ -321,18 +440,19 @@ int VelodyneOdom::align(const Eigen::Matrix4d &init_pose){
 	if(_push_new_keyframe_required(_pc_pose, _curr_keyframe_ind)){
 		// Use the original (non-downsampled point cloud)
 		
-		pcl::transformPointCloud(*_pc, *_aligned_pc, _ndt.getFinalTransformation());
+		pcl::transformPointCloud(*_pc, *_aligned_pc, _pc_pose.cast<float>());
 
 		// ### Do this is another thread
-		// ### You might want to use _map->points.reserve(...)
-	
-		/*	
+		// ### You might want to use _map->points.reserve(...)	
 		if(fitness_score < _params.ndt_fitness_score_thres / 10){
 			*_map += *_aligned_pc;
+			_voxel_filter.setLeafSize(0.05, 0.05, 0.05);
 			_voxel_filter.setInputCloud(_map);
 			_voxel_filter.filter(*_map);
+			_voxel_filter.setLeafSize (_params.voxel_leaf_size[0],
+										_params.voxel_leaf_size[1],
+										_params.voxel_leaf_size[2]);
 		}
-		*/
 		// Add new keyframe
 		_keyframes.push_back(_aligned_pc->makeShared());
 		_keyframe_poses.push_back(_pc_pose);

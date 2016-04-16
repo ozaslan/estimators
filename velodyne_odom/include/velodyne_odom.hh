@@ -10,6 +10,9 @@
 #include <pcl/conversions.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/registration/ndt.h>
+#include <pcl/registration/icp.h>
+#include <pcl/registration/icp_nl.h>
+// ### #include <pcl/registration/gicp.h>
 #include <pcl/filters/approximate_voxel_grid.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
@@ -69,7 +72,26 @@ public:
 		// checking requirement for pushing new keyframes.
 		double init_keyframe_trans_thres;
 		double init_keyframe_rot_thres;
-	
+		// Either of "NDT", "ICP", "NICP"
+		string method;
+
+		bool icp_use_reciprocal_corr;
+		double icp_max_corr_dist;
+		int icp_max_iter;
+		double icp_trans_eps;
+		double icp_euc_fitness_eps;
+
+		bool   nicp_use_reciprocal_corr;
+		double nicp_max_corr_dist;
+		int    nicp_max_iter;
+		double nicp_trans_eps;
+		double nicp_euc_fitness_eps;
+
+		double gicp_rot_eps;
+		int    gicp_corr_randomness; // The number of neighbors used for covariances computation.
+		int    gicp_max_iter;
+		double gicp_max_corr_dist;
+
 		VelodyneOdomParams() :	voxel_leaf_size({0.15, 0.15, 0.15}),
 								ndt_eps(0.01), 
 								ndt_step_size(0.1), 
@@ -83,11 +105,27 @@ public:
 								init_keyframe_trans_thres(1.00), // m
 								init_keyframe_rot_thres(DEG2RAD(10)), // radians
 								local_map_dims({40, 40, 40}), // m
-								local_map_max_points(7000) 
+								local_map_max_points(7000),
+								method("NDT"),
+								icp_use_reciprocal_corr(true),
+								icp_max_corr_dist(1.5),
+								icp_max_iter(50),
+								icp_trans_eps(1e-8),
+								icp_euc_fitness_eps(1),
+								nicp_use_reciprocal_corr(true),
+								nicp_max_corr_dist(1.5),
+								nicp_max_iter(50),
+								nicp_trans_eps(1e-8),
+								nicp_euc_fitness_eps(1),
+								gicp_rot_eps(0.001),
+								gicp_corr_randomness(3),
+								gicp_max_iter(50),
+								gicp_max_corr_dist(1)
 								{}
 		int print();
 	};
 private:
+	std::string _methods_list;
 	// Map of the environment as built by all keyframe pointclouds
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _map;
 	// Local subset of _map used for point cloud registration. This is used to speed up the process.
@@ -116,7 +154,10 @@ private:
 	// Registration mechanism	
 	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> _ndt;
 	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> _batch_ndt;
-
+	pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> _icp;
+	pcl::IterativeClosestPointNonLinear<pcl::PointXYZ, pcl::PointXYZ> _nicp;
+	// ### pcl::GeneralizedIterativeClosestPoint6d<pcl::PointXYZ, pcl::PointXYZ> _gicp;
+  
 	VelodyneOdomParams _params;
 
 	// GTSam mechanism (To be implemented later!)	

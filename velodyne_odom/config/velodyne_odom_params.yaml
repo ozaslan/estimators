@@ -2,13 +2,44 @@ voxel_leaf_size:
  x: 0.25
  y: 0.25
  z: 0.25
+
+# ICP usually cannot handle rotations. For such cases, use NICP or NDT
+method: "NDT"
+
 # Normal distribution transform (NDT) parameters for odometry.
 ndt:
  eps: 0.01
- step_size: 0.5
+ step_size: 1.5
  res: 1.0
  max_iter: 55
  fitness_score_thres: 1200
+
+icp:
+  use_reciprocal_corr: FALSE
+  max_corr_dist: 0.5
+  max_iter: 50
+  # The epsilon (difference) between the previous transformation and 
+  # the current estimated transformation
+  trans_eps: 1e-8
+  # The sum of Euclidean squared errors
+  euc_fitness_eps: 0.01
+
+gicp:
+  rot_eps: 0.001
+  corr_randomness: 3
+  max_iter: 50
+  max_corr_dist: 1.5
+
+
+nicp:
+  use_reciprocal_corr: TRUE
+  max_corr_dist: 0.5
+  max_iter: 50
+  # The epsilon (difference) between the previous transformation and 
+  # the current estimated transformation
+  trans_eps: 1e-8
+  # The sum of Euclidean squared errors
+  euc_fitness_eps: 0.01
 
 # NDT params for batch optimization             
 batch_ndt:
@@ -29,3 +60,4 @@ local_map_dims:
 init_keyframe_thres:
  trans: 2.0
  rot: 0.1744 # ~10 degrees (in radians)
+
