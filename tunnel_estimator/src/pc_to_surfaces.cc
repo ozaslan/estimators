@@ -126,7 +126,7 @@ int PC2Surfaces::_fit_segment(int seg){
 }
 
 int PC2Surfaces::_fit_contour(int seg){
-  if(type == _params.contour_type){
+  if(_params.contour_type == "circle"){
     int num_pts = 0;
     for(int segment : _segment_ids)
       num_pts += segment == seg;
@@ -223,4 +223,32 @@ int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
     }
   }
   return num_eliminated;
+}
+
+PC2SurfacesParams::PC2SurfacesParams(){
+  max_inner_iter = 33;
+  max_outer_iter = 33;
+  outlier_id = -99999;
+  unclassified_id = 99999;
+  term_perc_crit = 0.01;
+  normal_dev_thres1 = 5; // degrees
+  normal_dev_thres2 = 5; 
+  contour_fit_thres = 0.05; // ratio to radius
+  sphere_r = 7.5; // meters
+  segment_len = 1; // meters
+  normal_search_radius = 0.25;
+  contour_type = "circle";
+}
+
+void PC2SurfacesParams::print(){
+  cout << "max_inner_iter ----- : " << max_inner_iter << endl;
+  cout << "max_outer_iter ----- : " << max_outer_iter << endl;
+  cout << "term_perc_crit ----- : " << term_perc_crit << endl;
+  cout << "normal_dev_thres1 -- : " << normal_dev_thres1 << endl;
+  cout << "normal_dev_thres2 -- : " << normal_dev_thres2 << endl;
+  cout << "contour_fit_thres -- : " << contour_fit_thres << endl;
+  cout << "normal_search_radius : " << normal_search_radius << endl;
+  cout << "sphere_r ----------- : " << sphere_r << endl;
+  cout << "segment_len -------- : " << segment_len << endl;
+  cout << "contour_type ------- : " << contour_type << endl;
 }

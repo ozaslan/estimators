@@ -32,20 +32,8 @@
 
 struct PC2SurfacesParams{
   public:
-    PC2SurfacesParams(){
-      max_inner_iter = 33;
-      max_outer_iter = 33;
-      outlier_id = -99999;
-      unclassified_id = 99999;
-      term_perc_crit = 0.01;
-      normal_dev_thres1 = 5; // degrees
-      normal_dev_thres2 = 5; 
-      contour_fit_thres = 0.05; // ratio to radius
-      sphere_r = 7.5; // meters
-      segment_len = 1; // meters
-      normal_search_radius = 0.25;
-      contour_type = "circle";
-    }
+    PC2SurfacesParams();
+    void print();
 
     int max_inner_iter;
     int max_outer_iter;
@@ -91,6 +79,8 @@ class PC2Surfaces{
 
     int push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc);
     int fit_surfaces();
+
+    int set_params(const PC2SurfacesParams &params){ _params = params; }
 };
 
 
