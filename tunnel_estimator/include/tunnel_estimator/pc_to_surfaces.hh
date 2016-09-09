@@ -80,7 +80,7 @@ class PC2Surfaces{
     int push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc);
     int fit_surfaces();
 
-    int set_params(const PC2SurfacesParams &params){ _params = params; }
+    int set_params(const PC2SurfacesParams &params){ _params = params; return 0;}
 };
 
 
