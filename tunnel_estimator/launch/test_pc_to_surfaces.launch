@@ -6,16 +6,16 @@
   <arg name="bagfile_path00" value="/home/ozaslan/storage/inspot_2016-07-12-17-11-26.bag"/>
   <arg name="bagfile_path01" value="/home/ozaslan/inspot_2016-07-13-14-14-52.bag"/>
   <arg name="bagfile_path02" value="/home/ozaslan/inspot_2016-07-13-15-49-03.bag"/>
-  <arg name="bagfile_path03" value="$(env ROS_DATASET_PATH)/inspot/towne01"/>
-  <arg name="bagfile_path04" value="$(env ROS_DATASET_PATH)/inspot/towne02"/>
-  <arg name="bagfile_path05" value="$(env ROS_DATASET_PATH)/inspot/towne03"/>
-  <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04"/>
-  <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05"/>
+  <arg name="bagfile_path03" value="$(env ROS_DATASET_PATH)/inspot/towne01.bag"/>
+  <arg name="bagfile_path04" value="$(env ROS_DATASET_PATH)/inspot/towne02.bag"/>
+  <arg name="bagfile_path05" value="$(env ROS_DATASET_PATH)/inspot/towne03.bag"/>
+  <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04.bag"/>
+  <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05.bag"/>
 
-  <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path04)"/>
   <arg name="debug_mode"   value="FALSE"/>
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.50 --start=115 --duration=999 ">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.00 --start=0 --duration=999 ">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
   </node>
 
