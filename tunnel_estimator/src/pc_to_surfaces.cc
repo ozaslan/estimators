@@ -21,6 +21,7 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
   _segment_triad_map.clear();
   _segment_origin_map.clear();
+  _segment_contour_map.clear();
 
   _pc_orig = pc;
   if(_pc_sphere == NULL)
@@ -37,8 +38,9 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
   _filter_segment(0);
   _fit_segment(0);
-  //cout << "Triad[0]  : " << endl << _segment_triad_map[0] << endl;
-  //cout << "Origin[0] : " << endl << _segment_origin_map[0] << endl;
+  cout << "Triad[0]   : " << endl << _segment_triad_map[0] << endl;
+  cout << "Origin[0]  : " << endl << _segment_origin_map[0] << endl;
+  cout << "Contour[0] : " << endl << _segment_contour_map[0] << endl;
 
   for(int seg = 1 ; seg <= _params.sphere_r / _params.segment_len ; seg++){
     _filter_segment(seg);
@@ -131,10 +133,10 @@ int PC2Surfaces::_fit_segment(int seg){
   bool success = false;
 
   for(int outer_iter = 0 ; !success && outer_iter < _params.max_outer_iter ; outer_iter++){
-    cout << "outer_iter : " << outer_iter << endl;
+    //cout << "outer_iter : " << outer_iter << endl;
     success = false;
     for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
-      cout << "inner_iter 1 : " << inner_iter << endl;
+      //cout << "inner_iter 1 : " << inner_iter << endl;
       _init_triad(seg);
       success = !_eliminate_outliers(seg, "normals");
     }
@@ -143,11 +145,16 @@ int PC2Surfaces::_fit_segment(int seg){
 
     success = false;
     for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
-      cout << "inner_iter 2 : " << inner_iter << endl;
+      //cout << "inner_iter 2 : " << inner_iter << endl;
       _fit_contour(seg);
-      success = true;
-      //success = !_eliminate_outliers(seg, "contour");
+      success = !_eliminate_outliers(seg, "contour");
     }
+  }
+
+  if(success){
+    Eigen::Vector3d contour = _segment_contour_map[seg];
+    Eigen::Vector3d dcenter(0, contour(0), contour(1));
+    _segment_origin_map[seg] += _segment_triad_map[seg].transpose() * dcenter;
   }
 
   //cout << "Triad[" << seg << "] = " << _segment_triad_map[seg] << endl;
@@ -200,13 +207,15 @@ int PC2Surfaces::_fit_contour(int seg){
     }
 
     Eigen::VectorXd soln = (A.transpose() * A).inverse() * A.transpose() * b; 
-    double xc = - soln(0) / 2;
-    double yc = - soln(1) / 2;
+    double yc = - soln(0) / 2;
+    double zc = - soln(1) / 2;
     double R  = sqrt((soln(0) * soln(0) + soln(1) * soln(1)) / 4 - soln(2));
 
     _segment_contour_map[seg].resize(3, 1);
-    _segment_contour_map[seg] << xc, yc, R; 
+    _segment_contour_map[seg] << yc, zc, R; 
 
+    //cout << "Contour fit [" << seg <<"] : " << xc << ", " << yc << ", " << R << endl;
+ 
     return 3;
   } else {
     return 0;
@@ -224,6 +233,12 @@ int PC2Surfaces::_init_triad(int seg){
 
   Eigen::Vector3d origin(0, 0, 0);
 
+  Eigen::Vector3d init_axis_estimate;
+  if(seg == 0)
+    init_axis_estimate = _segment_triad_map[_params.unclassified_id].topLeftCorner<3, 1>();
+  else
+    init_axis_estimate = _segment_triad_map[seg - SGN(seg)].topLeftCorner<3, 1>();
+
   num_pts = _pc_sphere->size();
   int num_valid_normals = 0;
   int num_points = 0;
@@ -234,9 +249,11 @@ int PC2Surfaces::_init_triad(int seg){
     if(isnan(n.normal_x) || isnan(n.normal_y) || isnan(n.normal_z))
       normals.row(j++).setZero();
     else {
-      normals(j  , 0) = n.normal_x;
-      normals(j  , 1) = n.normal_y;
-      normals(j++, 2) = n.normal_z;
+      normals(j, 0) = n.normal_x;
+      normals(j, 1) = n.normal_y;
+      normals(j, 2) = n.normal_z;
+      normals.row(j) *= 1 - normals.row(j).dot(init_axis_estimate);
+      j++;
       num_valid_normals++;
     }
 
@@ -287,12 +304,11 @@ int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
         pcl::Normal &pcl_normal = (*_pc_sphere_normals)[i];
         normal << pcl_normal.normal_x, pcl_normal.normal_y, pcl_normal.normal_z;
         double dot_prod = normal.dot(segment_axis);
-        if(fabs(acos(dot_prod) - M_PI/2) > DEG2RAD(_params.normal_dev_thres1)){
-          //_segment_ids[i] = _params.outlier_id;
+        if(fabs(acos(dot_prod) - M_PI/2) > DEG2RAD(_params.normal_dev_thres2)){
+          num_eliminated += _outliers[i] == false;
           _outliers[i] = true;
-          num_eliminated++;
         } else
-          _outliers[i] = false;
+          1;//_outliers[i] = false;
       }
     }
   } else if(method == "contour"){
@@ -307,14 +323,15 @@ int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
           double r = sqrt(pow(proj_pt(1) - xc, 2) + pow(proj_pt(2) - yc, 2));
           if( fabs(R - r) / R > _params.contour_fit_thres){
             //_segment_ids[i] = _params.outlier_id;
+            num_eliminated += _outliers[i] == false;
             _outliers[i] = true;
-            num_eliminated++;
           } else
-            _outliers[i] = false;
+            1;//_outliers[i] = false;
         }
       }
     }
   }
+  //cout << "num_eliminated[" << seg << "] : " << num_eliminated << endl;
   return num_eliminated;
 }
 
