@@ -8,5 +8,6 @@ pc2surfaces:
   sphere_r: 7.7
   normal_search_radius: 0.27
   contour_type: "circle"
-  segment_len: 0.6
+  segment_len: 1.0
+  num_segments: 5
 

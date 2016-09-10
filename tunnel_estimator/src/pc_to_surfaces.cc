@@ -38,11 +38,13 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
   _filter_segment(0);
   _fit_segment(0);
-  cout << "Triad[0]   : " << endl << _segment_triad_map[0] << endl;
-  cout << "Origin[0]  : " << endl << _segment_origin_map[0] << endl;
-  cout << "Contour[0] : " << endl << _segment_contour_map[0] << endl;
+  //cout << "Triad[0]   : " << endl << _segment_triad_map[0] << endl;
+  //cout << "Origin[0]  : " << endl << _segment_origin_map[0] << endl;
+  //cout << "Contour[0] : " << endl << _segment_contour_map[0] << endl;
 
-  for(int seg = 1 ; seg <= _params.sphere_r / _params.segment_len ; seg++){
+  int num_segments = std::min(_params.num_segments, 
+                              (int)std::round(_params.sphere_r / _params.segment_len - 2));
+  for(int seg = 1 ; seg <= num_segments ; seg++){
     _filter_segment(seg);
     _fit_segment(seg);
     //cout << "Triad[" << seg << "] : " << endl << _segment_triad_map[seg] << endl;
@@ -107,7 +109,7 @@ int PC2Surfaces::_filter_segment(int seg){
     } else {
       triad  =  _segment_triad_map[seg - SGN(seg)];
       origin = _segment_origin_map[seg - SGN(seg)];
-      origin = origin + 2 * SGN(seg) * _params.segment_len * triad.topLeftCorner<3, 1>(); 
+      origin = origin + SGN(seg) * _params.segment_len * triad.topLeftCorner<3, 1>(); 
     }
   }
 
@@ -120,7 +122,7 @@ int PC2Surfaces::_filter_segment(int seg){
     Eigen::Vector3d pt;
     pt << pcl_pt.x, pcl_pt.y, pcl_pt.z;
     pt = triad.transpose() * (pt - origin);
-    if(-_params.segment_len * lower_mult < pt(0) && pt(0) <= _params.segment_len * upper_mult)
+    if(-_params.segment_len / 2 * lower_mult < pt(0) && pt(0) <= _params.segment_len / 2 * upper_mult)
       if(_segment_ids[i] == _params.unclassified_id)
           _segment_ids[i] = seg;
   }
@@ -284,6 +286,7 @@ int PC2Surfaces::_init_triad(int seg){
     triad.col(0) *= SGN(triad(0,0));
   triad.col(1) << 0, 0, 1;
   triad.col(1) = triad.col(0).cross(triad.col(1));
+  triad.col(1) /= triad.col(1).norm();
   triad.col(2) = triad.col(0).cross(triad.col(1));
 
   //cout << "\nTriad[" << seg << "] = " << triad << endl;
@@ -397,6 +400,39 @@ int PC2Surfaces::visualize_fit(){
     //_viewer->addCoordinateSystem (1, const Eigen::Affine3f &t, "ref_seg" + to_string(seg));
   }
 
+  _viewer->removeAllCoordinateSystems();
+
+  for(auto it : _segment_contour_map){
+    int seg = it.first;
+    Eigen::VectorXd fit = it.second;
+    Eigen::Matrix3d triad = _segment_triad_map[seg];
+    Eigen::Vector3d origin = _segment_origin_map[seg];
+
+    pcl::ModelCoefficients cylinder_coeff;
+    cylinder_coeff.values.resize (7);    // We need 7 values
+    cylinder_coeff.values[0] = origin(0) - _params.segment_len / 2 * triad(0, 0);
+    cylinder_coeff.values[1] = origin(1) - _params.segment_len / 2 * triad(1, 0);
+    cylinder_coeff.values[2] = origin(2) - _params.segment_len / 2 * triad(2, 0);
+    cylinder_coeff.values[3] = _params.segment_len * triad(0, 0);
+    cylinder_coeff.values[4] = _params.segment_len * triad(1, 0);
+    cylinder_coeff.values[5] = _params.segment_len * triad(2, 0);
+    cylinder_coeff.values[6] = fit(2);
+
+    string id = string("cylinder") + to_string(seg); 
+
+    _viewer->addCylinder (cylinder_coeff, id); 
+
+    _viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1, 1, 1, id); 
+    _viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, .3, id); 
+    _viewer->setShapeRenderingProperties ( pcl::visualization::PCL_VISUALIZER_SHADING, pcl::visualization::PCL_VISUALIZER_SHADING_FLAT, id );
+
+    Eigen::Affine3d affine3d;
+    affine3d.fromPositionOrientationScale (origin, triad, Eigen::Vector3d::Ones());
+    _viewer->addCoordinateSystem(0.5, affine3d.cast<float>(), "reference" + to_string(seg));
+
+  }
+
+
   pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> pc_rgb_handler(pc_rgb);
   if(is_first_frame){
     _viewer->addPointCloud<pcl::PointXYZRGB> (pc_rgb, pc_rgb_handler, "pc_sphere_color");
@@ -434,6 +470,7 @@ PC2SurfacesParams::PC2SurfacesParams(){
   segment_len = 1; // meters
   normal_search_radius = 0.25;
   contour_type = "circle";
+  num_segments = 7;
 }
 
 void PC2SurfacesParams::print(){
@@ -447,4 +484,5 @@ void PC2SurfacesParams::print(){
   cout << "sphere_r ----------- : " << sphere_r << endl;
   cout << "segment_len -------- : " << segment_len << endl;
   cout << "contour_type ------- : " << contour_type << endl;
+  cout << "num_segments ------- : " << num_segments << endl;
 }

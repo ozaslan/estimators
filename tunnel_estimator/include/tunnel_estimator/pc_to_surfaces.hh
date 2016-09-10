@@ -49,6 +49,7 @@ struct PC2SurfacesParams{
     double sphere_r; // meters
     double segment_len; // meters
     double normal_search_radius;
+    int    num_segments;
     string contour_type;
 };
 

@@ -42,6 +42,7 @@ void process_inputs(const ros::NodeHandle &n)
 	n.param("pc2surfaces/normal_search_radius", params.normal_search_radius, 0.25);
 	n.param("pc2surfaces/contour_type", params.contour_type, std::string("circle"));
 	n.param("pc2surfaces/segment_len", params.segment_len, 1.0);
+	n.param("pc2surfaces/num_segments", params.num_segments, 3);
 	n.param("debug_mode", debug_mode, false);
 
 	ROS_INFO(" ---------- TEST_PC2SURFACES NODE ------------");
