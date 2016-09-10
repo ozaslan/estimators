@@ -41,6 +41,7 @@ void process_inputs(const ros::NodeHandle &n)
 	n.param("pc2surfaces/sphere_r", params.sphere_r, 5.5);
 	n.param("pc2surfaces/normal_search_radius", params.normal_search_radius, 0.25);
 	n.param("pc2surfaces/contour_type", params.contour_type, std::string("circle"));
+	n.param("pc2surfaces/segment_len", params.segment_len, 1.0);
 	n.param("debug_mode", debug_mode, false);
 
 	ROS_INFO(" ---------- TEST_PC2SURFACES NODE ------------");
@@ -78,6 +79,7 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
   pcl::fromROSMsg(msg, *pc);
 
   pc2surfs.push_pc(pc);
+  pc2surfs.visualize_fit();
 
 }
 

@@ -12,14 +12,14 @@
   <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04"/>
   <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05"/>
 
-  <arg name="bagfile_path" value="$(arg bagfile_path00)"/>
-  <arg name="debug_mode"   value="TRUE"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
+  <arg name="debug_mode"   value="FALSE"/>
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--pause  $(arg bagfile_path) --rate=1.00 --start=00 --duration=999 ">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.99950 --start=00 --duration=999 ">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
   </node>
 
-  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_pc_to_surfaces.rviz"/>
+  <node pkg="rvizZZZ" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_pc_to_surfaces.rviz"/>
 
   <node pkg="tunnel_estimator" name="test_pc_to_surfaces" type="test_pc_to_surfaces" output="screen">
     <rosparam file="$(find tunnel_estimator)/config/pc_to_surfaces_params.yaml"/>

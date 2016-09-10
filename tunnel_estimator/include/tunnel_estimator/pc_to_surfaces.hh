@@ -14,6 +14,9 @@
 #include <pcl/registration/icp_nl.h>
 
 #include <pcl/features/normal_3d.h>
+#include <pcl/features/normal_3d_omp.h>
+
+#include <pcl/visualization/pcl_visualizer.h>
 
 // ### #include <pcl/registration/gicp.h>
 // #include <pcl/filters/approximate_voxel_grid.h>
@@ -60,8 +63,13 @@ class PC2Surfaces{
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_orig;
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_sphere;
     pcl::PointCloud<pcl::Normal>::Ptr _pc_sphere_normals;
-    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> _ne;
+    pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> _ne;
     vector<Eigen::Vector3d> _pc_projections; // y-z components are plane coordinates
+    vector<bool> _outliers;
+
+    pcl::visualization::PCLVisualizer::Ptr _viewer;
+
+    int _max_seg_ind;
 
     // This function fits surface normals to '_pc_sphere' and returns the
     // number of normal vectors
@@ -78,9 +86,10 @@ class PC2Surfaces{
     PC2Surfaces(const PC2SurfacesParams &params);
 
     int push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc);
-    int fit_surfaces();
 
     int set_params(const PC2SurfacesParams &params){ _params = params; return 0;}
+
+    int visualize_fit();
 };
 
 

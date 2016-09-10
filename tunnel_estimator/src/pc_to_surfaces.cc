@@ -1,46 +1,60 @@
 #include "pc_to_surfaces.hh"
 
-#define DEBUG_MSGS_ON 1
+#define DEBUG_MSGS_ON 0
 #define DEBUG_MSG_TEXT (string(__func__) + " : " + to_string(__LINE__))
+#define TOC {int a=1;}
+#define TIC {int a=1;}
+
+utils::colors::Colors colors;
+
+namespace utils{
+  std::map<string, ros::Time> __timers__;
+}
 
 PC2Surfaces::PC2Surfaces(){
   _pc_sphere = NULL;
   _pc_sphere_normals = NULL;
+  _viewer == NULL;
 }
 
 int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
+  _segment_triad_map.clear();
+  _segment_origin_map.clear();
 
-    _pc_orig = pc;
+  _pc_orig = pc;
   if(_pc_sphere == NULL)
     _pc_sphere = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
-  // Filter the original PC to only points that are at most 'r' distance from the the sensor origin
+
   _filter_segment(_params.unclassified_id);
-  // Fit normals to '_pc_sphere'
   _fit_normals();
-  // Estimate an initial triad using all the normals
+
   _init_triad(_params.unclassified_id);
+  _segment_origin_map[_params.unclassified_id].setZero();
+
+  //cout << "Initial Triad  : " << endl << _segment_triad_map[_params.unclassified_id] << endl;
+  //cout << "Initial Origin : " << endl << _segment_origin_map[_params.unclassified_id] << endl;
 
   _filter_segment(0);
   _fit_segment(0);
+  //cout << "Triad[0]  : " << endl << _segment_triad_map[0] << endl;
+  //cout << "Origin[0] : " << endl << _segment_origin_map[0] << endl;
 
-  for(int seg = 0 ; seg <= _params.sphere_r / _params.segment_len ; seg++){
+  for(int seg = 1 ; seg <= _params.sphere_r / _params.segment_len ; seg++){
     _filter_segment(seg);
     _fit_segment(seg);
+    //cout << "Triad[" << seg << "] : " << endl << _segment_triad_map[seg] << endl;
+    //cout << "Origin[" << seg << "] : " << endl << _segment_origin_map[seg] << endl;
     _filter_segment(-seg);
     _fit_segment(-seg);
   }
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-
-    return _segment_triad_map.size();
+  return _segment_triad_map.size();
 }
 
 int PC2Surfaces::_fit_normals(){
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    _ne.setInputCloud (_pc_sphere);
+  _ne.setInputCloud (_pc_sphere);
 
   // Create an empty kdtree representation, and pass it to the normal estimation object.
   // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
@@ -55,54 +69,96 @@ int PC2Surfaces::_fit_normals(){
     _pc_sphere_normals = pcl::PointCloud<pcl::Normal>::Ptr(new pcl::PointCloud<pcl::Normal>);
   _ne.compute (*_pc_sphere_normals);
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return _pc_sphere_normals->size();
+  return _pc_sphere_normals->size();
 }
 
 int PC2Surfaces::_filter_segment(int seg){
   Eigen::Matrix3d triad;
   Eigen::Vector3d origin;
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    if(seg == _params.unclassified_id){
-      int num_pts = _pc_orig->size();
-      _pc_sphere->reserve(num_pts / 3);
-      double r_squared = pow(_params.sphere_r, 2);
-      for(int i = 0 ; i < num_pts ; i++){
-        pcl::PointXYZ pt = (*_pc_orig)[i];
-        if(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z <= r_squared)
-          _pc_sphere->push_back(pt);
-      }
-      _segment_ids.clear();
-      _segment_ids.resize(_pc_sphere->size(), _params.unclassified_id);
+  if(seg == _params.unclassified_id){
+    int num_pts = _pc_orig->size();
+    _pc_sphere->clear();
+    _pc_sphere->reserve(num_pts / 3);
+    double r_squared = pow(_params.sphere_r, 2);
+    for(int i = 0 ; i < num_pts ; i++){
+      pcl::PointXYZ &pt = (*_pc_orig)[i];
+      if(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z <= r_squared)
+        _pc_sphere->push_back(pt);
+    }
+    _segment_ids.clear();
+    _segment_ids.resize(_pc_sphere->size(), _params.unclassified_id);
+    _outliers.clear();
+    _outliers.resize(_pc_sphere->size(), false);
 
-      DEBUG_MSG(DEBUG_MSG_TEXT)
-        return seg;
+    return seg;
 
-    } else if(seg == 0){
-      triad  = _segment_triad_map[_params.unclassified_id];
-      origin = _segment_origin_map[_params.unclassified_id];
+  } else if(seg == 0){
+    triad  = _segment_triad_map[_params.unclassified_id];
+    origin = _segment_origin_map[_params.unclassified_id];
+  } else {
+    // Check if triad and origin for 'seg' is already initialized
+    auto it = _segment_origin_map.find(seg);
+    if(it != _segment_origin_map.end()){
+      triad = _segment_triad_map[seg];
+      origin = it->second;
     } else {
       triad  =  _segment_triad_map[seg - SGN(seg)];
       origin = _segment_origin_map[seg - SGN(seg)];
       origin = origin + 2 * SGN(seg) * _params.segment_len * triad.topLeftCorner<3, 1>(); 
     }
-
-  int num_pts = _pc_sphere->size();
-  for(int i = 0 ; i < num_pts ; i++){
-    pcl::PointXYZ pt = (*_pc_sphere)[i];
-    pt.x -= origin(0);
-    if(-_params.segment_len < pt.x && pt.x <= _params.segment_len)
-      _segment_ids[i] = seg;
   }
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return seg;
+  int num_pts = _pc_sphere->size();
+  double upper_mult, lower_mult;
+  upper_mult = seg < 0 ? 1.3 : 1;
+  lower_mult = seg > 0 ? 1.3 : 1;
+  for(int i = 0 ; i < num_pts ; i++){
+    pcl::PointXYZ &pcl_pt = (*_pc_sphere)[i];
+    Eigen::Vector3d pt;
+    pt << pcl_pt.x, pcl_pt.y, pcl_pt.z;
+    pt = triad.transpose() * (pt - origin);
+    if(-_params.segment_len * lower_mult < pt(0) && pt(0) <= _params.segment_len * upper_mult)
+      if(_segment_ids[i] == _params.unclassified_id)
+          _segment_ids[i] = seg;
+  }
+
+  return seg;
 }
 
+int PC2Surfaces::_fit_segment(int seg){
+
+  bool success = false;
+
+  for(int outer_iter = 0 ; !success && outer_iter < _params.max_outer_iter ; outer_iter++){
+    cout << "outer_iter : " << outer_iter << endl;
+    success = false;
+    for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
+      cout << "inner_iter 1 : " << inner_iter << endl;
+      _init_triad(seg);
+      success = !_eliminate_outliers(seg, "normals");
+    }
+
+    _project_pc(seg);
+
+    success = false;
+    for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
+      cout << "inner_iter 2 : " << inner_iter << endl;
+      _fit_contour(seg);
+      success = true;
+      //success = !_eliminate_outliers(seg, "contour");
+    }
+  }
+
+  //cout << "Triad[" << seg << "] = " << _segment_triad_map[seg] << endl;
+  //cout << "Contour[" << seg << "] = " << _segment_contour_map[seg] << endl;
+
+  return !success;
+}
+
+
 int PC2Surfaces::_project_pc(int seg){
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    int num_pts = _pc_sphere->size();
+  int num_pts = _pc_sphere->size();
 
   Eigen::Matrix3d triad  = _segment_triad_map[seg];
   Eigen::Vector3d origin = _segment_origin_map[seg];
@@ -120,111 +176,108 @@ int PC2Surfaces::_project_pc(int seg){
     num_projected_pts++;
   }
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return num_projected_pts;
-}
-
-int PC2Surfaces::_fit_segment(int seg){
-
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    bool success = false;
-
-  for(int outer_iter = 0 ; !success && outer_iter < _params.max_outer_iter ; outer_iter++){
-    success = false;
-    for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
-      _init_triad(seg);
-      success = !_eliminate_outliers(seg, "normals");
-    }
-
-    _project_pc(seg);
-
-    success = false;
-    for(int inner_iter = 0 ; !success && inner_iter < _params.max_inner_iter ; inner_iter++){
-      _fit_contour(seg);
-      success = !_eliminate_outliers(0, "contour");
-    }
-  }
-
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return !success;
+  return num_projected_pts;
 }
 
 int PC2Surfaces::_fit_contour(int seg){
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    if(_params.contour_type == "circle"){
-      int num_pts = 0;
-      for(int segment : _segment_ids)
-        num_pts += segment == seg;
-      Eigen::MatrixXd A(num_pts, 3);
-      Eigen::VectorXd b(num_pts);
-      num_pts = _pc_projections.size();
-      for(int i = 0, j = 0 ; i < num_pts ; i++){
-        if(_segment_ids[i] == seg){
-          double y, z;
-          y = _pc_projections[i](1);
-          z = _pc_projections[i](2);
-          A.row(j) << y, z, 1;
-          b(j) = -(y * y + z * z);
-          j++;
-        }
+  if(_params.contour_type == "circle"){
+    int num_pts = 0;
+    for(int i = 0 ; i < (int)_segment_ids.size() ; i++)
+      num_pts += _segment_ids[i] == seg && !_outliers[i];
+
+    Eigen::MatrixXd A(num_pts, 3);
+    Eigen::VectorXd b(num_pts);
+    num_pts = _pc_projections.size();
+    for(int i = 0, j = 0 ; i < num_pts ; i++){
+      if(_segment_ids[i] == seg && !_outliers[i]){
+        double y, z;
+        y = _pc_projections[i](1);
+        z = _pc_projections[i](2);
+        A.row(j) << y, z, 1;
+        b(j) = -(y * y + z * z);
+        j++;
       }
-
-      Eigen::VectorXd soln = (A.transpose() * A).inverse() * A.transpose() * b; 
-      double xc = - soln(0) / 2;
-      double yc = - soln(1) / 2;
-      double R  = sqrt((soln(0) * soln(0) + soln(1) * soln(1)) / 4 - soln(2));
-
-      _segment_contour_map[seg].resize(3, 1);
-      _segment_contour_map[seg] << xc, yc, R; 
-
-      return 3;
-    } else {
-      return 0;
     }
+
+    Eigen::VectorXd soln = (A.transpose() * A).inverse() * A.transpose() * b; 
+    double xc = - soln(0) / 2;
+    double yc = - soln(1) / 2;
+    double R  = sqrt((soln(0) * soln(0) + soln(1) * soln(1)) / 4 - soln(2));
+
+    _segment_contour_map[seg].resize(3, 1);
+    _segment_contour_map[seg] << xc, yc, R; 
+
+    return 3;
+  } else {
+    return 0;
+  }
 }
 
 int PC2Surfaces::_init_triad(int seg){
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    int num_pts = 0;
-  for(int ind : _segment_ids)
-    num_pts += ind == seg;
+  int num_pts = 0;
+
+  for(int i = 0 ; i < (int)_segment_ids.size() ; i++)
+    num_pts += _segment_ids[i] == seg && !_outliers[i];
 
   Eigen::MatrixXd normals(num_pts, 3);
 
+  Eigen::Vector3d origin(0, 0, 0);
+
   num_pts = _pc_sphere->size();
   int num_valid_normals = 0;
+  int num_points = 0;
   for(int i = 0, j = 0 ; i < num_pts ; i++){
-    if(_segment_ids[i] != seg)
+    if(_segment_ids[i] != seg || _outliers[i])
       continue;
-    pcl::Normal pc_normal = (*_pc_sphere_normals)[i];
-    normals(j  , 0) = pc_normal.data_c[0];
-    normals(j  , 1) = pc_normal.data_c[1];
-    normals(j++, 2) = pc_normal.data_c[2];
-    num_valid_normals++;
+    pcl::Normal n = _pc_sphere_normals->points[i];
+    if(isnan(n.normal_x) || isnan(n.normal_y) || isnan(n.normal_z))
+      normals.row(j++).setZero();
+    else {
+      normals(j  , 0) = n.normal_x;
+      normals(j  , 1) = n.normal_y;
+      normals(j++, 2) = n.normal_z;
+      num_valid_normals++;
+    }
+
+    origin(0) += (*_pc_sphere)[i].x;
+    origin(1) += (*_pc_sphere)[i].y;
+    origin(2) += (*_pc_sphere)[i].z;
+    num_points++;
   }
 
+  _segment_origin_map[seg] = origin / num_points;
+
+  //cout << "normals[" << seg << "] = " << normals << endl;
+
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(Eigen::Matrix3d(normals.transpose() * normals));
+
+  //cout << "\n3-by-3 Matrix : " << Eigen::Matrix3d(normals.transpose() * normals) << endl;
 
   Eigen::Vector3d::Index min_eval_ind;
   es.eigenvalues().minCoeff(&min_eval_ind);
 
+  //cout << "\nEigenvalues[" << seg << "] = " << es.eigenvalues() << endl;
+  //cout << "\nEigenvectors[" << seg << "] = " << es.eigenvectors() << endl;
+
   Eigen::Matrix3d triad;
 
   triad.col(0) = es.eigenvectors().col(min_eval_ind);
+  if(triad(0, 0) != 0)
+    triad.col(0) *= SGN(triad(0,0));
   triad.col(1) << 0, 0, 1;
   triad.col(1) = triad.col(0).cross(triad.col(1));
   triad.col(2) = triad.col(0).cross(triad.col(1));
 
+  //cout << "\nTriad[" << seg << "] = " << triad << endl;
+
   _segment_triad_map[seg] = triad;
 
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return num_valid_normals;
+  return num_valid_normals;
 }
 
 int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    int num_pts = _pc_sphere->size();
+  int num_pts = _pc_sphere->size();
   int num_eliminated = 0;
   if(method == "normals"){
     Eigen::Vector3d segment_axis = _segment_triad_map[seg].topLeftCorner<3, 1>();
@@ -232,12 +285,14 @@ int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
     for(int i = 0 ; i < num_pts ; i++){
       if(_segment_ids[i] == seg){
         pcl::Normal &pcl_normal = (*_pc_sphere_normals)[i];
-        normal << pcl_normal.data_c[0], pcl_normal.data_c[1], pcl_normal.data_c[2];
+        normal << pcl_normal.normal_x, pcl_normal.normal_y, pcl_normal.normal_z;
         double dot_prod = normal.dot(segment_axis);
-        if(acos(dot_prod) > _params.normal_dev_thres1){
-          _segment_ids[i] = _params.outlier_id;
+        if(fabs(acos(dot_prod) - M_PI/2) > DEG2RAD(_params.normal_dev_thres1)){
+          //_segment_ids[i] = _params.outlier_id;
+          _outliers[i] = true;
           num_eliminated++;
-        }
+        } else
+          _outliers[i] = false;
       }
     }
   } else if(method == "contour"){
@@ -251,15 +306,102 @@ int PC2Surfaces::_eliminate_outliers(int seg, const std::string &method){
           Eigen::Vector3d &proj_pt = _pc_projections[i];
           double r = sqrt(pow(proj_pt(1) - xc, 2) + pow(proj_pt(2) - yc, 2));
           if( fabs(R - r) / R > _params.contour_fit_thres){
-            _segment_ids[i] = _params.outlier_id;
+            //_segment_ids[i] = _params.outlier_id;
+            _outliers[i] = true;
             num_eliminated++;
-          }
+          } else
+            _outliers[i] = false;
         }
       }
     }
   }
-  DEBUG_MSG(DEBUG_MSG_TEXT)
-    return num_eliminated;
+  return num_eliminated;
+}
+
+int PC2Surfaces::visualize_fit(){
+
+  //---------------------------------------------------------//
+  // -----Open 3D viewer and add point cloud and normals-----//
+  // --------------------------------------------------------//
+  bool is_first_frame = _viewer == NULL;
+  if(is_first_frame)
+    _viewer = pcl::visualization::PCLVisualizer::Ptr(new pcl::visualization::PCLVisualizer ("3D Viewer"));
+
+  _viewer->setBackgroundColor (0.3, 0.3, 0.3);
+
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr pc_rgb = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+  pcl::copyPointCloud(*_pc_sphere, *pc_rgb);
+
+  // Colorify the point cloud according to segment ids
+  for(int i = 0 ; i < (int)_segment_ids.size() ; i++){
+    int seg = _segment_ids[i];
+    if(seg == _params.unclassified_id)
+      seg = 1;
+    else if(seg == _params.outlier_id)
+      seg = 0;
+    else
+      seg = 2 * abs(seg) - (SGN(seg) < 0 ? 1 : 0) + 2;
+    Eigen::Vector3d color = colors[seg];
+    int r(255 * color(0)), g(255 * color(1)), b(255 * color(2));
+  
+    if(_outliers[i] == true)    
+      r = g = b = 0;
+
+    uint32_t rgb = (static_cast<uint32_t>(r) << 16 |
+        static_cast<uint32_t>(g) << 8  |
+        static_cast<uint32_t>(b));
+    (*pc_rgb)[i].rgb = *reinterpret_cast<float*>(&rgb);
+  }
+
+  _viewer->removeAllShapes();
+
+  for(auto it : _segment_triad_map) {
+    int seg = it.first, color_ind;
+    if(seg == _params.unclassified_id || seg == _params.outlier_id)
+      continue;
+    else
+      color_ind = 2 * abs(seg) - (SGN(seg) < 0 ? 1 : 0) + 2;
+
+    Eigen::Vector3d color = colors[color_ind];
+    int r(255 * color(0)), g(255 * color(1)), b(255 * color(2));
+
+    pcl::PointXYZ pt1, pt2;
+    pt1.x = _segment_origin_map[seg](0);
+    pt1.y = _segment_origin_map[seg](1);
+    pt1.z = _segment_origin_map[seg](2);
+    pt2.x = pt1.x + _segment_triad_map[seg](0, 0) * 1;
+    pt2.y = pt1.y + _segment_triad_map[seg](1, 0) * 1;
+    pt2.z = pt1.z + _segment_triad_map[seg](2, 0) * 1;
+
+    //cout << __func__ << " : " << endl << _segment_triad_map[seg] << endl;
+
+    _viewer->addArrow(pt2, pt1, r, g, b, false, "arrow_seg" + to_string(seg));
+
+    //_viewer->addCoordinateSystem (1, const Eigen::Affine3f &t, "ref_seg" + to_string(seg));
+  }
+
+  pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> pc_rgb_handler(pc_rgb);
+  if(is_first_frame){
+    _viewer->addPointCloud<pcl::PointXYZRGB> (pc_rgb, pc_rgb_handler, "pc_sphere_color");
+    //_viewer->addPointCloud<pcl::PointXYZ> (_pc_sphere, "pc_sphere");
+    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 10, 0.05, "pc_sphere_normals");
+    _viewer->addCoordinateSystem (1.0);
+    _viewer->initCameraParameters ();
+  } else {
+    _viewer->updatePointCloud<pcl::PointXYZRGB> (pc_rgb, pc_rgb_handler, "pc_sphere_color");
+    //_viewer->updatePointCloud<pcl::PointXYZ> (_pc_sphere, "pc_sphere");
+    _viewer->removePointCloud("pc_sphere_normals", 0);
+    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 3, 0.13, "pc_sphere_normals"); 
+  }
+
+  _viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pc_sphere_color");
+
+  _viewer->addSphere (pcl::PointXYZ(10, 10, 10), 3);
+
+  if(!_viewer->wasStopped ())
+    _viewer->spinOnce(1);
+
+  return 0;
 }
 
 PC2SurfacesParams::PC2SurfacesParams(){

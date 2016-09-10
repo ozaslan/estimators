@@ -122,7 +122,7 @@ add_library(pc_to_surfaces src/pc_to_surfaces.cc)
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-target_link_libraries(pc_to_surfaces ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(pc_to_surfaces ${catkin_LIBRARIES} ${PCL_LIBRARIES} utils)
 
 ## Declare a C++ executable
 add_executable(test_pc_to_surfaces test/test_pc_to_surfaces.cc)
