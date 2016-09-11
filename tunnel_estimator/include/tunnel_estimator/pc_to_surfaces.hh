@@ -15,6 +15,7 @@
 
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/normal_3d_omp.h>
+#include <pcl/filters/voxel_grid.h>
 
 #include <pcl/visualization/pcl_visualizer.h>
 
@@ -51,6 +52,8 @@ struct PC2SurfacesParams{
     double normal_search_radius;
     int    num_segments;
     string contour_type;
+    double voxel_leaf_size;
+    double curvature_thres;
 };
 
 class PC2Surfaces{

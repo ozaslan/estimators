@@ -1,13 +1,15 @@
 pc2surfaces:
-  max_inner_iter:  7.0
-  max_outer_iter:  3.0
-  term_perc_crit: 0.07
-  normal_dev_thres1: 15.0
+  max_inner_iter:  9.0
+  max_outer_iter:  5.0
+  term_perc_crit: 0.07 # not used
+  normal_dev_thres1: 15.0 # not used
   normal_dev_thres2: 10.0
-  contour_fit_thres: 10.10
+  curvature_thres: 0.1
+  contour_fit_thres: 0.10
   sphere_r: 7.7
   normal_search_radius: 0.27
   contour_type: "circle"
   segment_len: 1.0
   num_segments: 5
+  voxel_leaf_size: 0.11
 

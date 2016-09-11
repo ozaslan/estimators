@@ -2,8 +2,6 @@
 
 #define DEBUG_MSGS_ON 0
 #define DEBUG_MSG_TEXT (string(__func__) + " : " + to_string(__LINE__))
-#define TOC {int a=1;}
-#define TIC {int a=1;}
 
 utils::colors::Colors colors;
 
@@ -12,6 +10,7 @@ namespace utils{
 }
 
 PC2Surfaces::PC2Surfaces(){
+  _pc_orig = NULL;
   _pc_sphere = NULL;
   _pc_sphere_normals = NULL;
   _viewer == NULL;
@@ -19,11 +18,21 @@ PC2Surfaces::PC2Surfaces(){
 
 int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
+  TIC(__func__);
   _segment_triad_map.clear();
   _segment_origin_map.clear();
   _segment_contour_map.clear();
 
-  _pc_orig = pc;
+  if(_pc_orig == NULL)
+    _pc_orig = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+  pcl::VoxelGrid<pcl::PointXYZ> sor;
+  sor.setInputCloud(pc);
+  double &vls = _params.voxel_leaf_size;
+  sor.setLeafSize (vls, vls, vls);
+  sor.filter (*_pc_orig);
+
+
   if(_pc_sphere == NULL)
     _pc_sphere = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -43,7 +52,7 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
   //cout << "Contour[0] : " << endl << _segment_contour_map[0] << endl;
 
   int num_segments = std::min(_params.num_segments, 
-                              (int)std::round(_params.sphere_r / _params.segment_len - 2));
+      (int)std::round(_params.sphere_r / _params.segment_len - 2));
   for(int seg = 1 ; seg <= num_segments ; seg++){
     _filter_segment(seg);
     _fit_segment(seg);
@@ -53,6 +62,7 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
     _fit_segment(-seg);
   }
 
+  TOC(__func__);
   return _segment_triad_map.size();
 }
 
@@ -63,8 +73,11 @@ int PC2Surfaces::_fit_normals(){
   // Create an empty kdtree representation, and pass it to the normal estimation object.
   // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
   pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
+  TIC("1");
+  TIC("2");
   _ne.setSearchMethod (tree);
 
+  TOC("1");
   // Use all neighbors in a sphere of radius 3cm
   _ne.setRadiusSearch (_params.normal_search_radius);
 
@@ -73,6 +86,7 @@ int PC2Surfaces::_fit_normals(){
     _pc_sphere_normals = pcl::PointCloud<pcl::Normal>::Ptr(new pcl::PointCloud<pcl::Normal>);
   _ne.compute (*_pc_sphere_normals);
 
+  TOC("2");
   return _pc_sphere_normals->size();
 }
 
@@ -124,7 +138,7 @@ int PC2Surfaces::_filter_segment(int seg){
     pt = triad.transpose() * (pt - origin);
     if(-_params.segment_len / 2 * lower_mult < pt(0) && pt(0) <= _params.segment_len / 2 * upper_mult)
       if(_segment_ids[i] == _params.unclassified_id)
-          _segment_ids[i] = seg;
+        _segment_ids[i] = seg;
   }
 
   return seg;
@@ -217,7 +231,7 @@ int PC2Surfaces::_fit_contour(int seg){
     _segment_contour_map[seg] << yc, zc, R; 
 
     //cout << "Contour fit [" << seg <<"] : " << xc << ", " << yc << ", " << R << endl;
- 
+
     return 3;
   } else {
     return 0;
@@ -241,6 +255,8 @@ int PC2Surfaces::_init_triad(int seg){
   else
     init_axis_estimate = _segment_triad_map[seg - SGN(seg)].topLeftCorner<3, 1>();
 
+  //cout << "Initial Triad[" << seg << "] : " << endl << init_axis_estimate << endl;
+
   num_pts = _pc_sphere->size();
   int num_valid_normals = 0;
   int num_points = 0;
@@ -254,7 +270,11 @@ int PC2Surfaces::_init_triad(int seg){
       normals(j, 0) = n.normal_x;
       normals(j, 1) = n.normal_y;
       normals(j, 2) = n.normal_z;
-      normals.row(j) *= 1 - normals.row(j).dot(init_axis_estimate);
+      double curv_mult = exp(-pow(n.curvature / _params.curvature_thres, 2));
+      if(seg == _params.unclassified_id)
+        normals.row(j) *= curv_mult;
+      else
+        normals.row(j) *= (1 - fabs(normals.row(j).dot(init_axis_estimate))) * curv_mult;
       j++;
       num_valid_normals++;
     }
@@ -363,7 +383,7 @@ int PC2Surfaces::visualize_fit(){
       seg = 2 * abs(seg) - (SGN(seg) < 0 ? 1 : 0) + 2;
     Eigen::Vector3d color = colors[seg];
     int r(255 * color(0)), g(255 * color(1)), b(255 * color(2));
-  
+
     if(_outliers[i] == true)    
       r = g = b = 0;
 
@@ -458,19 +478,21 @@ int PC2Surfaces::visualize_fit(){
 }
 
 PC2SurfacesParams::PC2SurfacesParams(){
-  max_inner_iter = 33;
-  max_outer_iter = 33;
+  max_inner_iter = 9;
+  max_outer_iter = 5;
   outlier_id = -99999;
   unclassified_id = 99999;
-  term_perc_crit = 0.01;
-  normal_dev_thres1 = 5; // degrees
-  normal_dev_thres2 = 5; 
-  contour_fit_thres = 0.05; // ratio to radius
+  term_perc_crit = 0.07;
+  normal_dev_thres1 = 15; // degrees
+  normal_dev_thres2 = 10; 
+  curvature_thres = 0.1;
+  contour_fit_thres = 0.10; // ratio to radius
   sphere_r = 7.5; // meters
   segment_len = 1; // meters
   normal_search_radius = 0.25;
   contour_type = "circle";
   num_segments = 7;
+  voxel_leaf_size = 0.10;
 }
 
 void PC2SurfacesParams::print(){
@@ -485,4 +507,6 @@ void PC2SurfacesParams::print(){
   cout << "segment_len -------- : " << segment_len << endl;
   cout << "contour_type ------- : " << contour_type << endl;
   cout << "num_segments ------- : " << num_segments << endl;
+  cout << "voxel_leaf_size ---- : " << voxel_leaf_size << endl;
+  cout << "curvature_thres ---- : " << curvature_thres << endl;
 }
