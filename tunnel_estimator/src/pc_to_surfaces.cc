@@ -93,6 +93,7 @@ int PC2Surfaces::_fit_normals(){
 
   TIC("3");
   _point_uncertainties.resize(num_pts);
+  // Define point uncertainties
   for(int i = 0 ; i < num_pts ; i++){
     pcl::PointXYZ &pt = _pc_sphere->points[i];
     double r = sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
@@ -107,11 +108,12 @@ int PC2Surfaces::_fit_normals(){
         sin_a,           cos_a,       0,
         sin_e * cos_a, sin_e * - sin_a,   cos_e;
     cov << r * _params.var_r,                        0,                         0,
-        0, r * _params.var_azimutal,                         0,
-        0,                        0, r * _params.var_elevation;
+                           0, r * _params.var_azimutal,                         0,
+                           0,                        0, r * _params.var_elevation;
 
     _point_uncertainties[i] = rot.transpose() * cov * rot;
   }
+
   TOC("3");
   _nearest_neigh_inds.resize(num_pts);
   _nearest_neigh_sq_dists.resize(num_pts);
@@ -120,8 +122,10 @@ int PC2Surfaces::_fit_normals(){
   _normal_eigenpairs.resize(num_pts);
   _normal_min_eigval_ind.resize(num_pts);
   _normal_uncertainties.resize(num_pts);
+
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
   Eigen::Vector3d::Index min_eval_ind;
+
   //TIC("4");
   for(int i = 0 ; i < (int)_pc_sphere->points.size() ; i++){
     octree.radiusSearch (i, _params.normal_search_radius, _nearest_neigh_inds[i], _nearest_neigh_sq_dists[i], 0);
@@ -142,14 +146,19 @@ int PC2Surfaces::_fit_normals(){
     Eigen::Matrix3d dCx, dCy, dCz;
 
     int num_neigh_pts = _nearest_neigh_inds[i].size();
+
     _normal_uncertainties[i].setZero();
     Eigen::Matrix3d dnormal;
     Eigen::Vector3d pt;
     for(int j = 0 ; j < num_neigh_pts ; j++){
-      dCx.setZero(); dCy.setZero(); dCz.setZero();
+      dCx.setZero(); 
+      dCy.setZero(); 
+      dCz.setZero();
 
       pcl::PointXYZ &pt_pcl = _pc_sphere->points[_nearest_neigh_inds[i][j]];
+
       pt << pt_pcl.x, pt_pcl.y, pt_pcl.z;
+
       dCx.row(0) += _normal_centroids[i].topLeftCorner<3, 1>();
       dCx.col(0) += 1.0 / num_neigh_pts * pt;
       dCy.row(1) += _normal_centroids[i].topLeftCorner<3, 1>();
@@ -161,7 +170,7 @@ int PC2Surfaces::_fit_normals(){
       dnormal.col(1) = temp * dCy * min_evec / num_neigh_pts;
       dnormal.col(2) = temp * dCz * min_evec / num_neigh_pts;
 
-      _normal_uncertainties[i] += dnormal.transpose() * _point_uncertainties[j] * dnormal;
+      _normal_uncertainties[i] += dnormal.transpose() * _point_uncertainties[_nearest_neigh_inds[i][j]] * dnormal;
     }
   }
   //TOC("4");
