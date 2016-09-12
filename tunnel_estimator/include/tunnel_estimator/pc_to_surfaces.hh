@@ -57,6 +57,9 @@ struct PC2SurfacesParams{
     string contour_type;
     double voxel_leaf_size;
     double curvature_thres;
+    double var_r;
+    double var_azimutal;
+    double var_elevation;
   };
 
 class PC2Surfaces{
@@ -80,6 +83,9 @@ class PC2Surfaces{
     vector<Eigen::Vector4d> _normal_centroids;
     vector<pair<Eigen::Vector3d, Eigen::Matrix3d> > _normal_eigenpairs;
     vector<int> _normal_min_eigval_ind;
+    vector<Eigen::Matrix3d> _normal_uncertainties;
+    vector<Eigen::Matrix3d> _point_uncertainties;
+
 
     pcl::visualization::PCLVisualizer::Ptr _viewer;
 

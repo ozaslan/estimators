@@ -45,6 +45,10 @@ void process_inputs(const ros::NodeHandle &n)
 	n.param("pc2surfaces/num_segments", params.num_segments, 3);
 	n.param("pc2surfaces/voxel_leaf_size", params.voxel_leaf_size, 0.03);
 	n.param("pc2surfaces/curvature_thres", params.curvature_thres, 0.10);
+	n.param("pc2surfaces/var_r", params.var_r, 0.001);
+	n.param("pc2surfaces/var_azimutal", params.var_azimutal, 0.001);
+	n.param("pc2surfaces/var_elevation", params.var_elevation, 0.001);
+
 	n.param("debug_mode", debug_mode, false);
 
 	ROS_INFO(" ---------- TEST_PC2SURFACES NODE ------------");

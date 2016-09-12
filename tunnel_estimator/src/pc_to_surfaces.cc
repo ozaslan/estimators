@@ -75,14 +75,14 @@ int PC2Surfaces::_fit_normals(){
 
   // ------------------------------------------------------------------------------------------- //
   /*
-  TIC("1");
-  _ne.setInputCloud (_pc_sphere);
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
-  _ne.setRadiusSearch (_params.normal_search_radius);
-  _ne.setSearchMethod (tree);
-  _ne.compute (*_pc_sphere_normals);
-  TOC("1");
-  */
+     TIC("1");
+     _ne.setInputCloud (_pc_sphere);
+     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
+     _ne.setRadiusSearch (_params.normal_search_radius);
+     _ne.setSearchMethod (tree);
+     _ne.compute (*_pc_sphere_normals);
+     TOC("1");
+     */
   // ------------------------------------------------------------------------------------------- //
   TIC("2");
   //pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree(_params.voxel_leaf_size);
@@ -90,14 +90,39 @@ int PC2Surfaces::_fit_normals(){
   octree.setInputCloud (_pc_sphere);
   //octree.addPointsFromInputCloud ();
   int num_pts = _pc_sphere->points.size();
+
+  TIC("3");
+  _point_uncertainties.resize(num_pts);
+  for(int i = 0 ; i < num_pts ; i++){
+    pcl::PointXYZ &pt = _pc_sphere->points[i];
+    double r = sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
+    double elevation = acos(pt.z / r);
+    double azimuth   = atan2(pt.y, pt.x);
+    double cos_e = cos(elevation);
+    double sin_e = sin(elevation);
+    double sin_a = sin(azimuth);
+    double cos_a = cos(azimuth);
+    Eigen::Matrix3d rot, cov;
+    rot << cos_e * cos_a, cos_e * - sin_a, - sin_e,
+        sin_a,           cos_a,       0,
+        sin_e * cos_a, sin_e * - sin_a,   cos_e;
+    cov << r * _params.var_r,                        0,                         0,
+        0, r * _params.var_azimutal,                         0,
+        0,                        0, r * _params.var_elevation;
+
+    _point_uncertainties[i] = rot.transpose() * cov * rot;
+  }
+  TOC("3");
   _nearest_neigh_inds.resize(num_pts);
   _nearest_neigh_sq_dists.resize(num_pts);
   _normal_covs.resize(num_pts);
   _normal_centroids.resize(num_pts);
   _normal_eigenpairs.resize(num_pts);
   _normal_min_eigval_ind.resize(num_pts);
+  _normal_uncertainties.resize(num_pts);
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
   Eigen::Vector3d::Index min_eval_ind;
+  //TIC("4");
   for(int i = 0 ; i < (int)_pc_sphere->points.size() ; i++){
     octree.radiusSearch (i, _params.normal_search_radius, _nearest_neigh_inds[i], _nearest_neigh_sq_dists[i], 0);
     pcl::computeMeanAndCovarianceMatrix(*_pc_sphere, _nearest_neigh_inds[i], _normal_covs[i], _normal_centroids[i]);
@@ -110,7 +135,36 @@ int PC2Surfaces::_fit_normals(){
     _pc_sphere_normals->points[i].normal_y = _normal_eigenpairs[i].second(1, min_eval_ind);
     _pc_sphere_normals->points[i].normal_z = _normal_eigenpairs[i].second(2, min_eval_ind);
     
+    double min_eval = _normal_eigenpairs[i].first(min_eval_ind) ;
+    Eigen::Vector3d min_evec = _normal_eigenpairs[i].second.col(min_eval_ind);
+    Eigen::Matrix3d temp =  (min_eval * Eigen::Matrix3d::Identity() - _normal_eigenpairs[i].second);
+    temp = (temp.transpose() * temp).inverse() * temp.transpose();
+    Eigen::Matrix3d dCx, dCy, dCz;
+
+    int num_neigh_pts = _nearest_neigh_inds[i].size();
+    _normal_uncertainties[i].setZero();
+    Eigen::Matrix3d dnormal;
+    Eigen::Vector3d pt;
+    for(int j = 0 ; j < num_neigh_pts ; j++){
+      dCx.setZero(); dCy.setZero(); dCz.setZero();
+
+      pcl::PointXYZ &pt_pcl = _pc_sphere->points[_nearest_neigh_inds[i][j]];
+      pt << pt_pcl.x, pt_pcl.y, pt_pcl.z;
+      dCx.row(0) += _normal_centroids[i].topLeftCorner<3, 1>();
+      dCx.col(0) += 1.0 / num_neigh_pts * pt;
+      dCy.row(1) += _normal_centroids[i].topLeftCorner<3, 1>();
+      dCy.col(1) += 1.0 / num_neigh_pts * pt;
+      dCz.row(2) += _normal_centroids[i].topLeftCorner<3, 1>();
+      dCz.col(2) += 1.0 / num_neigh_pts * pt;
+
+      dnormal.col(0) = temp * dCx * min_evec / num_neigh_pts;
+      dnormal.col(1) = temp * dCy * min_evec / num_neigh_pts;
+      dnormal.col(2) = temp * dCz * min_evec / num_neigh_pts;
+
+      _normal_uncertainties[i] += dnormal.transpose() * _point_uncertainties[j] * dnormal;
+    }
   }
+  //TOC("4");
   TOC("2");
 
   return _pc_sphere_normals->size();
@@ -483,7 +537,7 @@ int PC2Surfaces::visualize_fit(){
   if(is_first_frame){
     _viewer->addPointCloud<pcl::PointXYZRGB> (pc_rgb, pc_rgb_handler, "pc_sphere_color");
     //_viewer->addPointCloud<pcl::PointXYZ> (_pc_sphere, "pc_sphere");
-    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 1, 0.05, "pc_sphere_normals");
+    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 10, 0.05, "pc_sphere_normals");
     _viewer->addCoordinateSystem (1.0);
     _viewer->initCameraParameters ();
   } else {
@@ -519,6 +573,10 @@ PC2SurfacesParams::PC2SurfacesParams(){
   contour_type = "circle";
   num_segments = 7;
   voxel_leaf_size = 0.10;
+  curvature_thres = 0.10;
+  var_r = 0.001;
+  var_azimutal = 0.001;
+  var_elevation = 0.001;
 }
 
 void PC2SurfacesParams::print(){
