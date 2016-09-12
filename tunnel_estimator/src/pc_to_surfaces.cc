@@ -68,25 +68,51 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
 int PC2Surfaces::_fit_normals(){
 
-  _ne.setInputCloud (_pc_sphere);
-
-  // Create an empty kdtree representation, and pass it to the normal estimation object.
-  // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
-  TIC("1");
-  TIC("2");
-  _ne.setSearchMethod (tree);
-
-  TOC("1");
-  // Use all neighbors in a sphere of radius 3cm
-  _ne.setRadiusSearch (_params.normal_search_radius);
-
   // Compute the features
   if(_pc_sphere_normals == NULL)  
     _pc_sphere_normals = pcl::PointCloud<pcl::Normal>::Ptr(new pcl::PointCloud<pcl::Normal>);
-  _ne.compute (*_pc_sphere_normals);
+  _pc_sphere_normals->points.resize(_pc_sphere->points.size());
 
+  // ------------------------------------------------------------------------------------------- //
+  /*
+  TIC("1");
+  _ne.setInputCloud (_pc_sphere);
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
+  _ne.setRadiusSearch (_params.normal_search_radius);
+  _ne.setSearchMethod (tree);
+  _ne.compute (*_pc_sphere_normals);
+  TOC("1");
+  */
+  // ------------------------------------------------------------------------------------------- //
+  TIC("2");
+  //pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree(_params.voxel_leaf_size);
+  pcl::search::KdTree<pcl::PointXYZ> octree(false);
+  octree.setInputCloud (_pc_sphere);
+  //octree.addPointsFromInputCloud ();
+  int num_pts = _pc_sphere->points.size();
+  _nearest_neigh_inds.resize(num_pts);
+  _nearest_neigh_sq_dists.resize(num_pts);
+  _normal_covs.resize(num_pts);
+  _normal_centroids.resize(num_pts);
+  _normal_eigenpairs.resize(num_pts);
+  _normal_min_eigval_ind.resize(num_pts);
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
+  Eigen::Vector3d::Index min_eval_ind;
+  for(int i = 0 ; i < (int)_pc_sphere->points.size() ; i++){
+    octree.radiusSearch (i, _params.normal_search_radius, _nearest_neigh_inds[i], _nearest_neigh_sq_dists[i], 0);
+    pcl::computeMeanAndCovarianceMatrix(*_pc_sphere, _nearest_neigh_inds[i], _normal_covs[i], _normal_centroids[i]);
+    es.compute(_normal_covs[i]);
+    _normal_eigenpairs[i].first = es.eigenvalues();
+    _normal_eigenpairs[i].second = es.eigenvectors();
+    es.eigenvalues().minCoeff(&min_eval_ind);
+    _normal_min_eigval_ind[i] = min_eval_ind;
+    _pc_sphere_normals->points[i].normal_x = _normal_eigenpairs[i].second(0, min_eval_ind);
+    _pc_sphere_normals->points[i].normal_y = _normal_eigenpairs[i].second(1, min_eval_ind);
+    _pc_sphere_normals->points[i].normal_z = _normal_eigenpairs[i].second(2, min_eval_ind);
+    
+  }
   TOC("2");
+
   return _pc_sphere_normals->size();
 }
 
@@ -457,7 +483,7 @@ int PC2Surfaces::visualize_fit(){
   if(is_first_frame){
     _viewer->addPointCloud<pcl::PointXYZRGB> (pc_rgb, pc_rgb_handler, "pc_sphere_color");
     //_viewer->addPointCloud<pcl::PointXYZ> (_pc_sphere, "pc_sphere");
-    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 10, 0.05, "pc_sphere_normals");
+    _viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (pc_rgb, _pc_sphere_normals, 1, 0.05, "pc_sphere_normals");
     _viewer->addCoordinateSystem (1.0);
     _viewer->initCameraParameters ();
   } else {

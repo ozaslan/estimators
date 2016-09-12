@@ -16,6 +16,9 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/octree/octree.h>
+#include <pcl/octree/octree_search.h>
+
 
 #include <pcl/visualization/pcl_visualizer.h>
 
@@ -54,7 +57,7 @@ struct PC2SurfacesParams{
     string contour_type;
     double voxel_leaf_size;
     double curvature_thres;
-};
+  };
 
 class PC2Surfaces{
   private:
@@ -70,6 +73,13 @@ class PC2Surfaces{
     pcl::NormalEstimationOMP<pcl::PointXYZ, pcl::Normal> _ne;
     vector<Eigen::Vector3d> _pc_projections; // y-z components are plane coordinates
     vector<bool> _outliers;
+
+    vector<vector<int  > > _nearest_neigh_inds;
+    vector<vector<float> > _nearest_neigh_sq_dists;
+    vector<Eigen::Matrix3d> _normal_covs;
+    vector<Eigen::Vector4d> _normal_centroids;
+    vector<pair<Eigen::Vector3d, Eigen::Matrix3d> > _normal_eigenpairs;
+    vector<int> _normal_min_eigval_ind;
 
     pcl::visualization::PCLVisualizer::Ptr _viewer;
 
