@@ -7,11 +7,11 @@ pc2surfaces:
   curvature_thres: 0.1
   contour_fit_thres: 0.10
   sphere_r: 5.7
-  normal_search_radius: 0.27
+  normal_search_radius: 0.35
   contour_type: "circle"
   segment_len: 1.0
   num_segments: 7
-  voxel_leaf_size: 0.10
+  voxel_leaf_size: 0.20
   var_r: 0.001
   var_azimuthal: 0.001
   var_elevation: 0.001

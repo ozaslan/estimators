@@ -17,11 +17,19 @@ PC2Surfaces::PC2Surfaces(){
 }
 
 int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
-
   TIC(__func__);
   _segment_triad_map.clear();
   _segment_origin_map.clear();
   _segment_contour_map.clear();
+
+  _segment_Mmatrix.clear();
+  _axis_eigenpairs.clear();
+  _axis_min_eigval_ind.clear();
+
+  _axis_uncertainties.clear();
+  _segment_contour_equ.clear();
+  _segment_dcontour.clear();
+  _contour_uncertainties.clear();
 
   if(_pc_orig == NULL)
     _pc_orig = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
@@ -84,14 +92,12 @@ int PC2Surfaces::_fit_normals(){
      TOC("1");
      */
   // ------------------------------------------------------------------------------------------- //
-  TIC("2");
   //pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree(_params.voxel_leaf_size);
   pcl::search::KdTree<pcl::PointXYZ> octree(false);
   octree.setInputCloud (_pc_sphere);
   //octree.addPointsFromInputCloud ();
   int num_pts = _pc_sphere->points.size();
 
-  TIC("3");
   _point_uncertainties.resize(num_pts);
   // Define point uncertainties
   for(int i = 0 ; i < num_pts ; i++){
@@ -108,13 +114,12 @@ int PC2Surfaces::_fit_normals(){
         sin_a,           cos_a,       0,
         sin_e * cos_a, sin_e * - sin_a,   cos_e;
     cov << r * _params.var_r,                        0,                         0,
-                           0, r * _params.var_azimutal,                         0,
-                           0,                        0, r * _params.var_elevation;
+        0, r * _params.var_azimutal,                         0,
+        0,                        0, r * _params.var_elevation;
 
     _point_uncertainties[i] = rot.transpose() * cov * rot;
   }
 
-  TOC("3");
   _nearest_neigh_inds.resize(num_pts);
   _nearest_neigh_sq_dists.resize(num_pts);
   _normal_covs.resize(num_pts);
@@ -138,10 +143,10 @@ int PC2Surfaces::_fit_normals(){
     _pc_sphere_normals->points[i].normal_x = _normal_eigenpairs[i].second(0, min_eval_ind);
     _pc_sphere_normals->points[i].normal_y = _normal_eigenpairs[i].second(1, min_eval_ind);
     _pc_sphere_normals->points[i].normal_z = _normal_eigenpairs[i].second(2, min_eval_ind);
-    
+
     double min_eval = _normal_eigenpairs[i].first(min_eval_ind) ;
     Eigen::Vector3d min_evec = _normal_eigenpairs[i].second.col(min_eval_ind);
-    Eigen::Matrix3d temp =  (min_eval * Eigen::Matrix3d::Identity() - _normal_eigenpairs[i].second);
+    Eigen::Matrix3d temp =  (min_eval * Eigen::Matrix3d::Identity() - _normal_covs[i]);
     temp = (temp.transpose() * temp).inverse() * temp.transpose();
     Eigen::Matrix3d dCx, dCy, dCz;
 
@@ -174,7 +179,6 @@ int PC2Surfaces::_fit_normals(){
     }
   }
   //TOC("4");
-  TOC("2");
 
   return _pc_sphere_normals->size();
 }
@@ -260,12 +264,162 @@ int PC2Surfaces::_fit_segment(int seg){
     Eigen::Vector3d contour = _segment_contour_map[seg];
     Eigen::Vector3d dcenter(0, contour(0), contour(1));
     _segment_origin_map[seg] += _segment_triad_map[seg].transpose() * dcenter;
+
+    _estimate_uncertainties(seg);
   }
 
   //cout << "Triad[" << seg << "] = " << _segment_triad_map[seg] << endl;
   //cout << "Contour[" << seg << "] = " << _segment_contour_map[seg] << endl;
 
   return !success;
+}
+
+int PC2Surfaces::_estimate_uncertainties(int seg){
+
+  TIC(__func__);
+  Eigen::Matrix3d dMx, dMy, dMz, daxis;
+  dMx.setZero();
+  dMy.setZero();
+  dMz.setZero();
+
+  int min_eval_ind = _axis_min_eigval_ind[seg];
+  double min_eval = _axis_eigenpairs[seg].first(min_eval_ind) ;
+  Eigen::Vector3d min_evec = _axis_eigenpairs[seg].second.col(min_eval_ind);
+  Eigen::Matrix3d temp =  (min_eval * Eigen::Matrix3d::Identity() - _segment_Mmatrix[seg]);
+  temp = (temp.transpose() * temp).inverse() * temp.transpose();
+
+  int num_pts = _pc_sphere->points.size();
+
+  Eigen::MatrixXd &A = _segment_contour_equ[seg].first;
+  Eigen::VectorXd &b = _segment_contour_equ[seg].second;
+
+  JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  const Eigen::MatrixXd &U = svd.matrixU();
+  const Eigen::MatrixXd &V = svd.matrixV();
+  Eigen::Matrix3d D;
+  D.setZero();
+  D.diagonal() = svd.singularValues();
+  Eigen::Matrix3d D_inv = D.inverse();
+  Eigen::Matrix3d D_inv_sqr = D_inv * D_inv;
+
+  Eigen::MatrixXd dU;
+  Eigen::Matrix3d dD, dV;
+  Eigen::VectorXd db;
+  Eigen::Matrix<double, 3, 2> dX;
+
+  dU = Eigen::MatrixXd::Zero(U.rows(), U.cols());
+  db = Eigen::VectorXd::Zero(b.rows());
+  dV.setZero();
+  dD.setZero();
+
+  Eigen::Matrix3d omegaU, omegaV;
+  omegaU.setZero();
+  omegaV.setZero();
+
+  Eigen::Matrix3d &triad = _segment_triad_map[seg];
+
+  Eigen::Matrix3d err;
+
+  _contour_uncertainties[seg] = Eigen::MatrixXd(3, 3);
+  _contour_uncertainties[seg].setZero();
+  Eigen::MatrixXd &contour_uncertainty = _contour_uncertainties[seg];
+
+  Eigen::MatrixXd Temp01 = V * D_inv;
+  Eigen::MatrixXd Temp02 = D_inv * U.transpose();
+  Eigen::MatrixXd Temp03 = U.transpose() * b;
+  //Eigen::MatrixXd Temp04 = Temp01 * U.transpose();
+  Eigen::MatrixXd Temp05 = D_inv_sqr * Temp03;
+  Eigen::MatrixXd Temp06 = Temp02 * b;
+  Eigen::MatrixXd Temp07 = V * Temp02;
+
+
+  for(int i = 0, j = 0 ; i < num_pts ; i++){
+    if(_outliers[i] == false && _segment_ids[i] == seg){
+      pcl::Normal &normal_pcl = _pc_sphere_normals->points[i];
+      Eigen::Vector3d normal;
+      normal << normal_pcl.normal_x, normal_pcl.normal_y, normal_pcl.normal_z;
+
+      dMx.row(0) += normal;
+      dMx.col(0) += normal;
+      dMy.row(1) += normal;
+      dMy.col(1) += normal;
+      dMz.row(2) += normal;
+      dMz.col(2) += normal;
+
+      daxis.col(0) = temp * dMx * min_evec;
+      daxis.col(1) = temp * dMy * min_evec;
+      daxis.col(2) = temp * dMz * min_evec;
+
+      _axis_uncertainties[seg] += daxis * _normal_uncertainties[i] * daxis.transpose();
+
+      // ------------------------------------------------------- //
+      // Project point uncertaincy
+      Eigen::MatrixXd pt_uncertainty = triad * _point_uncertainties[i] * triad.transpose();
+      pt_uncertainty = pt_uncertainty.bottomRightCorner<2, 2>();
+
+      for(int dim = 0 ; dim <= 1 ; dim++){
+
+        // Calculate dD
+        err = U.row(j).transpose() * V.row(dim);
+        dD.diagonal() = err.diagonal();  
+
+        // Calculate dV & dU
+        Eigen::Matrix2d temp;
+        Eigen::Vector2d uv, soln;
+        for(int k = 0 ; k < 3 ; k++){
+          for(int l = k + 1 ; l < 3 ; l++){
+            temp << D(l, l), D(k, k), D(k, k), D(l, l);
+            uv << err(k, l), -err(l, k);
+            soln = temp.inverse() * uv;
+            omegaU(k, l) =  soln(0);
+            omegaU(l, k) = -soln(0);
+            omegaV(k, l) =  soln(1);
+            omegaV(l, k) = -soln(1);
+          }
+        }
+        dU =  U * omegaU;
+        dV = -V * omegaV;
+
+        // Calculate db
+        db.setZero();
+
+        db(j) = -2 * _pc_projections[i](dim);
+
+        // Calculate dX
+        
+        /*
+        Eigen::MatrixXd Temp01 = V * D_inv;
+        Eigen::MatrixXd Temp02 = D_inv * U.transpose();
+        Eigen::MatrixXd Temp03 = U.transpose() * b;
+        Eigen::MatrixXd Temp04 = Temp01 * U.transpose();
+        Eigen::MatrixXd Temp05 = D_inv_sqr * Temp03;
+        Eigen::MatrixXd Temp06 = Temp02 * b;
+        Eigen::MatrixXd Temp07 = V * Temp02;
+
+        dX.col(dim) = 
+          V * D_inv          * dU.transpose() *  b +
+          V * dD * D_inv_sqr *  U.transpose() *  b +
+          dV * D_inv          *  U.transpose() *  b +
+          V * D_inv          *  U.transpose() * db;
+        */
+        dX.col(dim) = 
+          Temp01 * dU.transpose() *  b +
+          V * dD * Temp05 +
+          dV * Temp06 +
+          Temp07 * db;
+        
+      }
+
+      // Calculate dxc, dyc, dR
+      Eigen::MatrixXd &dcontour = _segment_dcontour[seg];
+      Eigen::MatrixXd temp = dcontour * dX;
+      contour_uncertainty += temp * pt_uncertainty * temp.transpose();
+
+      DEBUG_MSG(DEBUG_MSG_TEXT);
+      j++;
+    }
+  }
+  //cout << "Contour Uncert[" << seg << "] = " << endl << _contour_uncertainties[seg] << endl;
 }
 
 
@@ -297,8 +451,12 @@ int PC2Surfaces::_fit_contour(int seg){
     for(int i = 0 ; i < (int)_segment_ids.size() ; i++)
       num_pts += _segment_ids[i] == seg && !_outliers[i];
 
-    Eigen::MatrixXd A(num_pts, 3);
-    Eigen::VectorXd b(num_pts);
+    _segment_contour_equ[seg].first  = Eigen::MatrixXd(num_pts, 3);
+    _segment_contour_equ[seg].second = Eigen::VectorXd(num_pts);
+
+    Eigen::MatrixXd &A = _segment_contour_equ[seg].first;
+    Eigen::VectorXd &b = _segment_contour_equ[seg].second;
+
     num_pts = _pc_projections.size();
     for(int i = 0, j = 0 ; i < num_pts ; i++){
       if(_segment_ids[i] == seg && !_outliers[i]){
@@ -318,6 +476,11 @@ int PC2Surfaces::_fit_contour(int seg){
 
     _segment_contour_map[seg].resize(3, 1);
     _segment_contour_map[seg] << yc, zc, R; 
+
+    _segment_dcontour[seg].resize(3, 3);
+    _segment_dcontour[seg].row(0) << -0.5, 0, 0;
+    _segment_dcontour[seg].row(1) << 0, -0.5, 0;
+    _segment_dcontour[seg].row(2) << yc / (4 * R), zc / (4 * R), -0.5 / R ;
 
     //cout << "Contour fit [" << seg <<"] : " << xc << ", " << yc << ", " << R << endl;
 
@@ -378,12 +541,17 @@ int PC2Surfaces::_init_triad(int seg){
 
   //cout << "normals[" << seg << "] = " << normals << endl;
 
-  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(Eigen::Matrix3d(normals.transpose() * normals));
+  _segment_Mmatrix[seg] = normals.transpose() * normals;
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(_segment_Mmatrix[seg]);
 
   //cout << "\n3-by-3 Matrix : " << Eigen::Matrix3d(normals.transpose() * normals) << endl;
 
   Eigen::Vector3d::Index min_eval_ind;
   es.eigenvalues().minCoeff(&min_eval_ind);
+
+  _axis_eigenpairs[seg].first = es.eigenvalues();
+  _axis_eigenpairs[seg].second = es.eigenvectors();
+  _axis_min_eigval_ind[seg] = min_eval_ind;
 
   //cout << "\nEigenvalues[" << seg << "] = " << es.eigenvalues() << endl;
   //cout << "\nEigenvectors[" << seg << "] = " << es.eigenvectors() << endl;

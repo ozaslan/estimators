@@ -33,6 +33,7 @@
 //
 
 #include <Eigen/Eigenvalues> 
+#include <Eigen/SVD>
 
 
 #include <utils.hh>
@@ -70,6 +71,14 @@ class PC2Surfaces{
     std::map<int, Eigen::Matrix3d> _segment_triad_map;
     std::map<int, Eigen::Vector3d> _segment_origin_map;
     std::map<int, Eigen::VectorXd> _segment_contour_map;
+    std::map<int, Eigen::Matrix3d> _segment_Mmatrix;
+    std::map<int, pair<Eigen::Vector3d, Eigen::Matrix3d> > _axis_eigenpairs;
+    std::map<int, int> _axis_min_eigval_ind;
+    std::map<int, Eigen::Matrix3d> _axis_uncertainties;
+    std::map<int, pair<Eigen::MatrixXd, Eigen::VectorXd> > _segment_contour_equ;
+    std::map<int, Eigen::MatrixXd> _segment_dcontour;
+    std::map<int, Eigen::MatrixXd> _contour_uncertainties;
+
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_orig;
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_sphere;
     pcl::PointCloud<pcl::Normal>::Ptr _pc_sphere_normals;
@@ -101,6 +110,7 @@ class PC2Surfaces{
     int _eliminate_outliers(int seg, const std::string &method);
     int _project_pc(int seg);
     int _fit_contour(int seg);
+    int _estimate_uncertainties(int seg);
   public:
     PC2Surfaces();
     PC2Surfaces(const PC2SurfacesParams &params);
