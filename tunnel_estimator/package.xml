@@ -49,10 +49,13 @@
   <build_depend>rospy</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
-  <build_depend>uniform_feature_extractor</build_depend>
-  <build_depend>uniform_feature_tracker</build_depend>
+  <build_depend>uniform_feat_extractor</build_depend>
+  <build_depend>uniform_feat_tracker</build_depend>
   <build_depend>utils</build_depend>
   <build_depend>visualization_msgs</build_depend>
+  <build_depend>calib_params</build_depend>
+  <build_depend>image_transport</build_depend>
+
   <run_depend>cv_bridge</run_depend>
   <run_depend>geometry_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
@@ -62,10 +65,12 @@
   <run_depend>rospy</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>std_msgs</run_depend>
-  <run_depend>uniform_feature_extractor</run_depend>
-  <run_depend>uniform_feature_tracker</run_depend>
+  <run_depend>uniform_feat_extractor</run_depend>
+  <run_depend>uniform_feat_tracker</run_depend>
   <run_depend>utils</run_depend>
   <run_depend>visualization_msgs</run_depend>
+  <run_depend>calib_params</run_depend>
+  <run_depend>image_transport</run_depend>
 
    <build_depend>cmake_modules</build_depend>
    <run_depend>cmake_modules</run_depend>

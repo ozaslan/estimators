@@ -1,0 +1,497 @@
+#include "visual_1d_odom.hh"
+#include <opencv2/core/eigen.hpp>
+
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/density.hpp>
+using namespace boost::accumulators;
+
+#define DEBUG 0
+#if DEBUG == 1
+	#define DEBUG_MSG PRINT_FLF
+#else
+	#define DEBUG_MSG 
+#endif
+
+VisionBasedTunnelLocalizer::VisionBasedTunnelLocalizer(int num_feats, int history_len, string detector_type, double threshold){
+	DEBUG_MSG
+	_feat_buffer_idx = 0;
+	_num_feats = num_feats;
+	_of_history_len = history_len;
+	_detector_type = detector_type;
+	_feat_threshold = threshold;
+	_octree = NULL;
+	_x_disp = 0;
+	_x_var  = 0.0000001;
+	_fim  = Eigen::Matrix6d::Zero();
+	_extractor = UniformFeatureExtractor(_detector_type, 3,_num_feats, Size2i(4, 3), _feat_threshold, true);
+	_num_frames_pushed = 0;
+	DEBUG_MSG
+}
+
+bool VisionBasedTunnelLocalizer::push_camera_data(const vector<cv::Mat> &frames, const Eigen::Matrix4d &pose){
+	// This function requires the same number of calibration
+	// data with the number of frames to be used in optical flow
+	// and displacement estimation.
+	DEBUG_MSG
+	//cout << "_cam_params.size() = " << _cam_params.size() << endl;
+	//cout << "frames.size() = " << frames.size() << endl;
+	ASSERT(_cam_params.size() == frames.size(), "_cam_params.size() == frames.size()");
+
+	_x_disp = 0;
+	_x_var  = 0.0000001;
+
+	//cout << ">>> pose = " << endl << pose << endl;
+
+	// ### Parallelize this part with boost or p_thread.
+	for(int t = 0 ; t < (int)_trackers.size() ; t++){
+		//cv::equalizeHist( frames[t], frames[t] );
+		//cv::blur(frames[t], frames[t], cv::Size(5, 5));
+		//cv::adaptiveThreshold(frames[t], frames[t], 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 23, 0);
+		//cv::blur(frames[t], frames[t], cv::Size(7, 7));
+		_trackers[t].track_features(frames[t], _extractor, _cam_params[t].image_mask);
+    /*
+		if(t == 0){
+			cv::namedWindow("0");
+			cv::imshow("0", frames[t]);
+		} else {
+			cv::namedWindow("1");
+			cv::imshow("1", frames[t]);
+		}
+    */
+		if(_feats[!_feat_buffer_idx][t].size() == 0){
+			//cout << "Filling up the other buffer" << endl;
+			_trackers[t].get_features(   _feats[!_feat_buffer_idx][t], _feat_ids[!_feat_buffer_idx][t], 3);
+			cv::undistortPoints(_feats[!_feat_buffer_idx][t], _feats[!_feat_buffer_idx][t], 
+					_cam_params[t].camera_matrix, _cam_params[t].dist_coeffs);
+			_poses[!_feat_buffer_idx] = pose;
+
+			/*
+			cout << ">> t = " << t << endl;
+			cout << ">> trackers.size() = " << _trackers.size() << endl;
+			cout << ">> _feat_buffer_idx = " << _feat_buffer_idx << endl;
+			cout << ">>_feat_ids[!_feat_buffer_idx].size() = " << _feat_ids[!_feat_buffer_idx].size() << endl;
+			cout << ">>_feat_ids[!_feat_buffer_idx][t].size() = " << _feat_ids[!_feat_buffer_idx][t].size() << endl;
+			cout << ">>_feat_ids[_feat_buffer_idx].size() = " << _feat_ids[_feat_buffer_idx].size() << endl;
+			cout << ">>_feat_ids[_feat_buffer_idx][t].size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
+			*/
+		}
+	}
+
+	_num_frames_pushed++;
+	_poses[_feat_buffer_idx] = pose;
+
+	//if(_num_frames_pushed > _of_history_len)
+	//	cout << "WARNING!!! # of frame pushed is larger than the history length" << endl;
+	DEBUG_MSG
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::register_camera_params(const vector<CameraCalibParams> &params){
+	DEBUG_MSG
+	_reset();
+	Eigen::Matrix3d temp_cam_mat;
+	for(int i = 0 ; i < (int)params.size() ; i++){
+		_cam_params.push_back(params[i]); // ### This is supposed to carry a deep copy.
+		_trackers.push_back(UniformFeatureTracker(_num_feats, _of_history_len));
+		cv2eigen(params[i].camera_matrix, temp_cam_mat);
+		_inv_camera_matrices.push_back(temp_cam_mat.inverse());
+	}
+
+	_x_disp = 0;
+	_x_var  = 0.0000001;
+
+	/* ###
+	_images.resize(params.size());
+	*/
+	_feats[0].resize(params.size());
+	_feats[1].resize(params.size());
+	_feat_ids[0].resize(params.size());
+	_feat_ids[1].resize(params.size());
+
+	DEBUG_MSG
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::_reset(){
+	DEBUG_MSG
+	_trackers.clear();
+	_feat_buffer_idx = 0;
+	_feats[0].clear();
+	_feats[1].clear();
+	_feat_ids[0].clear();
+	_feat_ids[1].clear();
+	//_images.clear(); ### 
+	_cam_params.clear();
+	_inv_camera_matrices.clear();
+	_num_frames_pushed = 0;
+	// ### How will I then clear octree?
+	//if(_octree != NULL)
+	//	delete _octree;
+	//_octree = NULL;
+	_x_disp = 0;
+	_x_var  = 0;
+	_fim  = Eigen::Matrix6d::Zero();
+	_poses[0] = Eigen::Matrix4d::Identity();
+	_poses[1] = Eigen::Matrix4d::Identity();
+	_of_tail_vecs.clear();
+	_of_tip_vecs.clear();
+	DEBUG_MSG
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::set_map(const pcl::PointCloud<pcl::PointXYZ>::Ptr &map){
+	DEBUG_MSG
+	if(_octree != NULL)
+		delete _octree;
+	_octree = new pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>(0.05);
+	_octree->setInputCloud(map);
+	_octree->addPointsFromInputCloud();
+
+	_x_disp = 0;
+	_x_var  = 0.0000001;
+
+	DEBUG_MSG
+	return true;
+}
+// This function gets the optical flow trailers generated by '_history_len'
+// frames, does ray-casting and geometrically estimates the world-x displacement.
+// The displacement is between the poses '_history_len - 1' frames earlier and the
+// last fed pose. Thus, it is users responsibility to incorporate the 
+// non-uniform time step in the case '_history_len > 2'.
+bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
+	// Fetch the features and ids from the feature tracker.
+	// ### Later remove this, just an automated sanity check for myself
+	DEBUG_MSG
+	ASSERT(_trackers.size() == _cam_params.size(), "_trackers.size() == _cam_params.size()");
+
+	x_disp = _x_disp = 0;
+	_x_var = 0.0000001;
+
+	//cout << "P1" << endl;fflush(NULL);
+
+	int num_trackers = _trackers.size();
+	for(int t = 0 ; t < num_trackers ; t++){
+		//cout << "before feat_ids.size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
+		_trackers[t].get_features(   _feats[_feat_buffer_idx][t], _feat_ids[_feat_buffer_idx][t], 3);
+		cv::undistortPoints(_feats[_feat_buffer_idx][t] , _feats[_feat_buffer_idx][t], 
+							_cam_params[t].camera_matrix, _cam_params[t].dist_coeffs);
+
+		//cv::Mat plot_image(480, 640, CV_8UC3, Scalar(255,255,255));
+		//_trackers[t].plot_flow(plot_image);
+		//cv::namedWindow("plot_image");
+		//cv::imshow("plot_image", plot_image);
+		//cv::waitKey(1);
+
+		//cout << "after feat_ids.size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
+		/*
+		if(_feats[!_feat_buffer_idx][t].size() != _feats[_feat_buffer_idx][t].size() ){
+			_feats[!_feat_buffer_idx][t] = _feats[_feat_buffer_idx][t];
+			_feat_ids[!_feat_buffer_idx][t] = _feat_ids[_feat_buffer_idx][t];
+			_poses[!_feat_buffer_idx]    = _poses[_feat_buffer_idx];
+		}
+		*/
+
+		//cout << "Camera Matrix[" << t << "] = " << endl << _cam_params[t].camera_matrix << endl;
+		//cout << "Dist Coeffs[" << t << "] = " << endl << _cam_params[t].dist_coeffs << endl;
+		//cout << "Inv Cam Mat[" << t << "] = " << endl << _inv_camera_matrices[t] << endl;
+
+	}
+
+	//cout << "P2" << endl;fflush(NULL);
+
+	// Reorder the '_feats[][]' so that feats. with the same ids align
+	// at the same index.
+	int num_tracked_feats = 0;
+	for(int t = 0 ; t < num_trackers ; t++){
+		//cout << "P2.1" << endl;fflush(NULL);
+		for(int i = 0 ; i < _num_feats ; i++){
+			//cout << "P2.2.1" << endl;fflush(NULL);
+			int tail_id = _feat_ids[_feat_buffer_idx][t][i];
+			/*
+			cout << "P2.2.2" << endl;fflush(NULL);
+			cout << "t = " << t << " i = " << i << endl;
+			cout << "trackers.size() = " << _trackers.size() << endl;
+			cout << "_feat_buffer_idx = " << _feat_buffer_idx << endl;
+			cout << "_feat_ids[!_feat_buffer_idx].size() = " << _feat_ids[!_feat_buffer_idx].size() << endl;
+			cout << "_feat_ids[!_feat_buffer_idx][t].size() = " << _feat_ids[!_feat_buffer_idx][t].size() << endl;
+			cout << "_feat_ids[_feat_buffer_idx].size() = " << _feat_ids[_feat_buffer_idx].size() << endl;
+			cout << "_feat_ids[_feat_buffer_idx][t].size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
+			*/
+			//if(_feat_ids[!_feat_buffer_idx][t].size() == 0)
+			//	continue;
+			int tip_id  = _feat_ids[!_feat_buffer_idx][t][i];
+			//cout << "P2.2.3" << endl;fflush(NULL);
+			if(tail_id == -1) 
+				continue;
+			if(tail_id == tip_id){
+				num_tracked_feats++;
+				continue;
+			}
+			for(int j = 0 ; j < _num_feats ; j++){
+				//cout << "P2.2.3.1" << endl;fflush(NULL);
+				tip_id = _feat_ids[!_feat_buffer_idx][t][j];
+				//cout << "P2.2.3.2" << endl;fflush(NULL);
+				if(tail_id == tip_id){
+					if(i != j){
+						//cout << "P2.2.3.2.1" << endl;fflush(NULL);
+						std::swap(_feat_ids[!_feat_buffer_idx][t][i],
+								  _feat_ids[!_feat_buffer_idx][t][j]);
+						//cout << "P2.2.3.2.2" << endl;fflush(NULL);
+						std::swap(_feats[!_feat_buffer_idx][t][i],
+								  _feats[!_feat_buffer_idx][t][j]);
+						//cout << "P2.2.3.2.3" << endl;fflush(NULL);
+					}
+					num_tracked_feats++;
+					break;
+				}
+				//cout << "P2.2.3.3" << endl;fflush(NULL);
+			}
+		}
+	}
+
+	/*
+	for(int t = 0 ; t < num_trackers ; t++)
+		for(int i = 0 ; i < (int)_feat_ids[_feat_buffer_idx][t].size() ; i++){
+			cout << "(" << _feat_ids[_feat_buffer_idx][t][i] << ", " << _feat_ids[!_feat_buffer_idx][t][i] << ")" << endl;
+		}
+	cout << endl;
+	*/
+
+	//cout << "P3" << endl;fflush(NULL);
+
+	// Back-project points with '_feat_ids[i] != -1'
+	_of_tail_vecs.clear();
+	_of_tip_vecs.clear();
+	_of_tail_vecs.reserve(num_tracked_feats);
+	_of_tip_vecs.reserve(num_tracked_feats);
+
+	Eigen::Vector3f tail_dir, tip_dir;
+	Eigen::Matrix3f tail_trans, tip_trans;
+
+	Eigen::Vector3f tail_origin = _poses[!_feat_buffer_idx].topRightCorner<3, 1>().cast<float>();
+	Eigen::Vector3f  tip_origin = _poses[ _feat_buffer_idx].topRightCorner<3, 1>().cast<float>();
+
+	pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>::AlignedPointTVector tail_proj, tip_proj;
+
+	//cout << "P4" << endl;fflush(NULL);
+
+	for(int t = 0 ; t < (int)_cam_params.size() ; t++){
+		// Get the vector pointing along the feature in the world frame :
+		// (1) - 2D -> 3D in camera frame
+		// (2) - camera -> robot frame
+		// (3) - robot -> world frame
+		tail_trans = (_poses[!_feat_buffer_idx].topLeftCorner<3, 3>() * 
+				       _cam_params[t].relative_pose.topLeftCorner<3, 3>() /*  
+				_inv_camera_matrices[t]*/).cast<float>();
+		tip_trans  = (_poses[_feat_buffer_idx].topLeftCorner<3, 3>() * 
+				_cam_params[t].relative_pose.topLeftCorner<3, 3>() /*  
+				_inv_camera_matrices[t]*/).cast<float>();
+
+		//cout << "tail_trans[" << t << "] = " << endl << tail_trans << endl;
+		//cout << " tip_trans[" << t << "] = " << endl <<  tip_trans << endl;
+		//cout << "cam_params[" << t << "] = " << endl << _cam_params[t].relative_pose << endl;
+		//cout << "pose[0] = " << endl << _poses[0] << endl;
+		//cout << "pose[1] = " << endl << _poses[1] << endl;
+
+		for(int i = 0; i < _num_feats ; i++){
+			if(_feat_ids[_feat_buffer_idx][t][i] != -1 &&
+					_feat_ids[_feat_buffer_idx][t][i] == _feat_ids[!_feat_buffer_idx][t][i]){
+				tail_dir(0) = _feats[!_feat_buffer_idx][t][i].x;
+				tail_dir(1) = _feats[!_feat_buffer_idx][t][i].y;
+				tail_dir(2) = 1;
+				tail_dir = tail_trans * tail_dir;
+				tip_dir(0) = _feats[_feat_buffer_idx][t][i].x;
+				tip_dir(1) = _feats[_feat_buffer_idx][t][i].y;
+				tip_dir(2) = 1;
+				tip_dir = tip_trans * tip_dir;
+				tail_proj.clear();
+        //cout << "tail_origin = " << endl << tail_origin << endl;
+        //cout << "tail_dir    = " << endl << tail_dir    << endl;
+				_octree->getIntersectedVoxelCenters(tail_origin, tail_dir, tail_proj, 1);
+				if(tail_proj.size() == 0)
+					continue;
+				tip_proj.clear();
+				_octree->getIntersectedVoxelCenters( tip_origin,  tip_dir,  tip_proj, 1);
+				if(tip_proj.size() == 0) 
+					continue;
+        /*
+				cout << "----------------------" << endl;
+				cout << "tail_origin = " << endl << tail_origin << endl;
+				cout << " tip_origin = " << endl <<  tip_origin << endl;
+				cout << "tail_dir[" << i << "] = " << endl << tail_dir << endl;
+				cout << " tip_dir[" << i << "] = " << endl <<  tip_dir << endl;
+				cout << "tail_proj[" << i << "] = " << endl << tail_proj[0] << endl;
+				cout << " tip_proj[" << i << "] = " << endl <<  tip_proj[0] << endl;
+        */
+				double len;	
+				len = sqrt( pow(tail_proj[0].x - tail_origin(0), 2) +
+							pow(tail_proj[0].y - tail_origin(1), 2) +
+							pow(tail_proj[0].z - tail_origin(2), 2));
+				tail_dir = tail_dir / tail_dir.norm() * len;
+				tail_proj[0].x = tail_dir(0) + tail_origin(0);
+				tail_proj[0].y = tail_dir(1) + tail_origin(1);
+				tail_proj[0].z = tail_dir(2) + tail_origin(2);
+
+				len = sqrt( pow(tip_proj[0].x - tip_origin(0), 2) +
+							pow(tip_proj[0].y - tip_origin(1), 2) +
+							pow(tip_proj[0].z - tip_origin(2), 2));
+				tip_dir = tip_dir / tip_dir.norm() * len;
+				tip_proj[0].x = tip_dir(0) + tip_origin(0);
+				tip_proj[0].y = tip_dir(1) + tip_origin(1);
+				tip_proj[0].z = tip_dir(2) + tip_origin(2);
+
+				if(tail_proj[0].x != tail_proj[0].x ||
+				    tip_proj[0].x !=  tip_proj[0].x)
+					continue;
+				_of_tail_vecs.push_back(tail_proj[0]);
+				_of_tip_vecs.push_back(tip_proj[0]);
+			}    
+		}
+	}
+
+	//cout << "P5" << endl;fflush(NULL);
+	// Do the vector algebra for each optical flow vector.
+	vector<double> x_disps;
+	x_disps.resize(_of_tail_vecs.size());
+	//cout << "# of tail vectors successfully back-projected : " << _of_tail_vecs.size() << endl;
+	for(int t = 0 ; t < (int)_cam_params.size() ; t++){
+		for(int i = 0; i < (int)_of_tail_vecs.size() ; i++){
+			tail_dir(0) = _of_tail_vecs[i].x - tail_origin(0);
+			tail_dir(1) = _of_tail_vecs[i].y - tail_origin(1);
+			tail_dir(2) = _of_tail_vecs[i].z - tail_origin(2);
+			tip_dir(0)  = _of_tip_vecs[i].x - tip_origin(0);
+			tip_dir(1)  = _of_tip_vecs[i].y - tip_origin(1);
+			tip_dir(2)  = _of_tip_vecs[i].z - tip_origin(2);
+			/*
+			cout << "HERE t = " << t << " i = " << i << endl;
+			cout << "tip_dir = " << tip_dir << endl;
+			cout << "tail_dir = " << tail_dir << endl;
+			double tail_dir_norm_sq = tail_dir.squaredNorm();
+			double  tip_dir_norm_sq =  tip_dir.squaredNorm();
+			double tail_dir_norm    = sqrt(tail_dir_norm_sq);
+			double  tip_dir_norm    = sqrt( tip_dir_norm_sq);
+			double cos_th = tail_dir.dot(tip_dir) / tail_dir_norm / tip_dir_norm;
+			x_disps[i] = sqrt(tail_dir_norm_sq + tip_dir_norm_sq - 2 * tail_dir_norm * tip_dir_norm * cos_th);
+			*/
+			x_disps[i] = -(tip_dir(0) - tail_dir(0));
+			//cout << "x_disps[" << i << "] = " << x_disps[i] << endl;
+		}
+	}
+
+	//cout << "P6" << endl;fflush(NULL);
+	
+	_x_var = 0;
+	_x_disp = 0;
+
+	if(x_disps.size() != 0){
+		std::sort(x_disps.begin(), x_disps.end());
+		//x_disp = _x_disp = x_disps[x_disps.size() / 2.0];
+		
+		for(int i = 0 ; i < (int)x_disps.size() ; i++){
+			_x_disp += x_disps[i];
+			//cout << "x_disp(" << i << ") = " << x_disps[i] << ";" << endl;
+		}
+		_x_disp /= x_disps.size();
+		//cout << "mean = " << _x_disp << ";" << endl;
+		for(int i = 0 ; i < (int)x_disps.size() ; i++){
+			_x_var += pow(x_disps[i] - _x_disp, 2.0);
+			//cout << "x_disps(" << i << ") = " << x_disps[i] << endl;
+			//cout << "delta_x[" << i << "] = " << tip_origin(0) - tail_origin(0) << endl;
+		}
+		_x_var /= x_disps.size();
+	}
+
+
+	_feat_buffer_idx = !_feat_buffer_idx;
+
+	//cout << "P7" << endl; fflush(NULL);
+
+  accumulator_set<double, stats<tag::density > > acc(tag::density::cache_size=x_disps.size(), tag::density::num_bins=3);
+  typedef boost::iterator_range<std::vector<std::pair<double, double> >::iterator > histogram_type;
+
+  
+  for(std::size_t i = 0; i < (int)x_disps.size(); i++) {
+    acc(x_disps[i]);
+  }
+  histogram_type histogram = density(acc);
+  /*
+  for (std::size_t i = 0; i < histogram.size(); ++i) {
+    cout << "First: " << histogram[i].first << "\t Second: " << histogram[i].second << endl;
+  }
+  */
+ 
+  vector<int> bins_to_include;
+  double max_bin_perc = histogram[0].second;
+  int max_bin_ind = 0;
+  for(int i = 1 ; i < histogram.size() ; i++){
+    if(max_bin_perc < histogram[i].second){
+      max_bin_perc = histogram[i].second;
+      max_bin_ind = i;
+    }
+  }
+
+  bins_to_include.push_back(max_bin_ind);
+
+  double bin_min = histogram[max_bin_ind].first;
+  double bin_max = (max_bin_ind == histogram.size() - 1) ? 99999 : histogram[max_bin_ind + 1].first;
+  // cout << "bin_min = " << bin_min << " bin_max = " << bin_max << endl; 
+  _x_disp = 0;
+  int num_disps = 0;
+  for(int i = 0 ; i < x_disps.size() ; i++){
+    if(x_disps[i] >= bin_min && x_disps[i] < bin_max){
+      _x_disp += x_disps[i];
+      num_disps++;
+    }
+  }
+  _x_disp /= (num_disps + 0.00001);
+  //_x_disp /= 1.5;
+
+	cout << "_x_disp = " << _x_disp << " _x_var = " << _x_var << endl;
+  /*
+  double perc = 0.75;
+  for(int i = 0 ; i < histogram.size() ; i++){
+    
+    if()  
+  }
+  */
+
+	DEBUG_MSG
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::get_displacement(double &x_disp){
+	x_disp = _x_disp;
+  _x_disp = 0;
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::get_variance(double &x_var){
+	x_var = _x_var;
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::get_back_projected_flow_vectors(vector<pcl::PointXYZ> &tails, vector<pcl::PointXYZ> &tips){
+	tails = _of_tail_vecs;
+	tips  = _of_tip_vecs;
+	return true;
+}
+
+// This functions estimates the covariance of the displacement 
+// estimate. It should be emphasized that the uncertainty regarding
+// the x-coordinate is for displacement, not the position. Also 
+// the off-diagonal elements encode the uncertainty cross-corelation 
+// between the estimated x-disp. and the given y-z and yaw estimates.
+// Thus the 6-by-6 covariance matrix has 1+2*3 = 7 non-zero element
+// (1 for x-disp, 3 for cross-corelation between x and y-z-yaw).
+bool VisionBasedTunnelLocalizer::get_covariance(Eigen::Matrix6d &cov){
+	// ### to be implemented
+	return true;
+}
+
+bool VisionBasedTunnelLocalizer::plot_flows(vector<cv::Mat> &imgs, bool plot_flow, bool plot_feat){
+	assert(imgs.size() == _cam_params.size());
+	for(int t = 0 ; t < (int)_cam_params.size() ; t++)
+		_trackers[t].plot_flow(imgs[t], plot_flow, plot_feat);
+	return true;
+}

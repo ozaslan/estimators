@@ -17,7 +17,7 @@ PC2Surfaces::PC2Surfaces(){
 }
 
 int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
-  TIC(__func__);
+  //TIC(__func__);
   _segment_triad_map.clear();
   _segment_origin_map.clear();
   _segment_contour_map.clear();
@@ -70,7 +70,7 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
     _fit_segment(-seg);
   }
 
-  TOC(__func__);
+  //TOC(__func__);
   return _segment_triad_map.size();
 }
 
@@ -734,6 +734,18 @@ int PC2Surfaces::visualize_fit(){
   return 0;
 }
 
+int PC2Surfaces::get_segment_pc(int seg, pcl::PointCloud<pcl::PointXYZ> &pc){
+  pc.points.clear();
+  pc.points.reserve(_pc_sphere->points.size() / 5);
+  int num_pts = _segment_ids.size();
+  for(int i = 0 ; i < num_pts ; i++){
+    if(_segment_ids[i] == seg && _outliers[i] == false)
+      pc.points.push_back(_pc_sphere->points[i]);
+  }
+
+  return pc.points.size();
+}
+    
 PC2SurfacesParams::PC2SurfacesParams(){
   max_inner_iter = 9;
   max_outer_iter = 5;

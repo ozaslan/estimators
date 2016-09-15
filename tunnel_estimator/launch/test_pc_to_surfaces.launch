@@ -15,8 +15,12 @@
   <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
   <arg name="debug_mode"   value="FALSE"/>
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.00 --start=0 --duration=999 --quiet">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.30 --start=13 --duration=999 --quiet">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
+    <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
+    <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
+    <remap from="/quadruple/top_left/image_raw/compressed"     to="/cam/top_left/compressed"/>
+    <remap from="/quadruple/top_right/image_raw/compressed"    to="/cam/top_right/compressed"/>
   </node>
 
   <node pkg="rvizZZZ" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_pc_to_surfaces.rviz"/>
@@ -26,5 +30,12 @@
     <param name="debug_mode" value="$(arg debug_mode)"/>
     
     <remap from="~/velodyne_points" to="/velodyne_points"/>
+    <remap from="~/cam" to="/cam/top_left/compressed"/>
+
+    <param name="top_left_cam_calib_file"		  value="$(find calib_data)/camera/inspot_top_left_cam.yaml"/>
+		<param name="top_right_cam_calib_file"		value="$(find calib_data)/camera/inspot_top_right_cam.yaml"/>
+		<param name="bottom_right_cam_calib_file"	value="$(find calib_data)/camera/inspot_bottom_right_cam.yaml"/>
+		<param name="bottom_left_cam_calib_file"	value="$(find calib_data)/camera/inspot_bottom_left_cam.yaml"/>
+
   </node>
 </launch>

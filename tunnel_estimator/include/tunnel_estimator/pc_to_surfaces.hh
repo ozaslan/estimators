@@ -119,6 +119,16 @@ class PC2Surfaces{
 
     int set_params(const PC2SurfacesParams &params){ _params = params; return 0;}
 
+    int get_segments( map<int, Eigen::Vector3d> &segment_origins, 
+                      map<int, Eigen::Matrix3d> &segment_triads, 
+                      map<int, Eigen::VectorXd> &segment_contours){
+      segment_origins  = _segment_origin_map;
+      segment_triads   = _segment_triad_map;
+      segment_contours = _segment_contour_map;
+    }
+
+    int get_segment_pc(int seg, pcl::PointCloud<pcl::PointXYZ> &pc);
+
     int visualize_fit();
 };
 

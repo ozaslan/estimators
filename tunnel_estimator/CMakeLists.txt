@@ -35,9 +35,11 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   visualization_msgs
   utils
+  image_transport
   cmake_modules
-  #uniform_feature_extractor
-  #uniform_feature_tracker
+  calib_params
+  uniform_feat_extractor
+  uniform_feat_tracker
   )
 
 
@@ -96,7 +98,8 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include/tunnel_estimator/
   LIBRARIES
-  CATKIN_DEPENDS cv_bridge geometry_msgs nav_msgs pcl_ros quadrotor_ukf_lite roscpp rospy sensor_msgs std_msgs uniform_feature_extractor uniform_feature_tracker utils visualization_msgs
+  CATKIN_DEPENDS cv_bridge geometry_msgs nav_msgs pcl_ros quadrotor_ukf_lite roscpp rospy sensor_msgs std_msgs uniform_feat_extractor uniform_feat_tracker 
+                 utils visualization_msgs image_transport calib_params
   DEPENDS Eigen OpenCV
   )
 
@@ -118,18 +121,20 @@ add_definitions(${PCL_DEFINITIONS})
 
 ## Declare a C++ library
 add_library(pc_to_surfaces src/pc_to_surfaces.cc)
+add_library(visual_1d_odom src/visual_1d_odom.cc)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 target_link_libraries(pc_to_surfaces ${catkin_LIBRARIES} ${PCL_LIBRARIES} utils)
+target_link_libraries(visual_1d_odom ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OPENCV_LIBRARIES})
 
 ## Declare a C++ executable
 add_executable(test_pc_to_surfaces test/test_pc_to_surfaces.cc)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-target_link_libraries(test_pc_to_surfaces ${catkin_LIBRARIES} pc_to_surfaces)
+target_link_libraries(test_pc_to_surfaces ${catkin_LIBRARIES} pc_to_surfaces visual_1d_odom calib_params)
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(tunnel_estimator_node
