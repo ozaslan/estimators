@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!--
+
+-->
+<launch>
+  <param name="use_sim_time" value="false" />
+
+  <arg name="bagfile_path00" value="/home/ozaslan/storage/inspot_2016-07-12-17-11-26.bag"/>
+  <arg name="bagfile_path01" value="/home/ozaslan/inspot_2016-07-13-14-14-52.bag"/>
+  <arg name="bagfile_path02" value="/home/ozaslan/inspot_2016-07-13-15-49-03.bag"/>
+  <arg name="bagfile_path03" value="$(env ROS_DATASET_PATH)/inspot/towne01.bag"/>
+  <arg name="bagfile_path04" value="$(env ROS_DATASET_PATH)/inspot/towne02.bag"/>
+  <arg name="bagfile_path05" value="$(env ROS_DATASET_PATH)/inspot/towne03.bag"/>
+  <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04.bag"/>
+  <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05.bag"/>
+
+  <arg name="bagfile_path" value="$(arg bagfile_path00)"/>
+  <arg name="debug_mode"   value="TRUE"/>
+
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.10 --start=0 --duration=999 --quiet">
+    <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
+    <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
+    <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
+    <remap from="/quadruple/top_left/image_raw/compressed"     to="/cam/top_left/compressed"/>
+    <remap from="/quadruple/top_right/image_raw/compressed"    to="/cam/top_right/compressed"/>
+  </node>
+
+  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_icra2017_video.rviz"/>
+
+  <node pkg="tunnel_estimator" name="test_icra2017_video" type="test_icra2017_video" output="screen">
+    <rosparam file="$(find tunnel_estimator)/config/pc_to_surfaces_params.yaml"/>
+    <rosparam file="$(find tunnel_estimator)/config/visualization_params.yaml"/>
+    <param name="debug_mode" value="$(arg debug_mode)"/>
+    
+    <remap from="~/velodyne_points" to="/velodyne_points"/>
+    <remap from="~/cam" to="/cam/top_left/compressedAAAAAAA"/>
+
+    <param name="top_left_cam_calib_file"		  value="$(find calib_data)/camera/inspot_top_left_cam.yaml"/>
+		<param name="top_right_cam_calib_file"		value="$(find calib_data)/camera/inspot_top_right_cam.yaml"/>
+		<param name="bottom_right_cam_calib_file"	value="$(find calib_data)/camera/inspot_bottom_right_cam.yaml"/>
+		<param name="bottom_left_cam_calib_file"	value="$(find calib_data)/camera/inspot_bottom_left_cam.yaml"/>
+
+  </node>
+</launch>

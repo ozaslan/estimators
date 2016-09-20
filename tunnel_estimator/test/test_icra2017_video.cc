@@ -6,6 +6,7 @@
 
 
 #include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/Marker.h>
 
 #include "utils.hh"
 #include "pc_to_surfaces.hh"
@@ -15,7 +16,13 @@
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
-ros::Publisher rviz_publ, pc_orig_publ, pc_sphere_publ, pc_sphere_normals_publ;
+ros::Publisher rviz_publ, 
+  pc_orig_publ, 
+  pc_sphere_publ, 
+  pc_sphere_normals_publ,
+  normals_publ,
+  triads_publ,
+  planes_publ;
 ros::Subscriber velodyne_subs;
 sensor_msgs::PointCloud2 velodyne_msg;
 
@@ -34,12 +41,16 @@ PC2Surfaces pc2surfs;
 
 Eigen::Vector4d normals_color;
 double normals_scale, normals_norm;
+double triads_scale, triads_norm;
+double planes_scale;
 int normals_skip;
 Eigen::Vector4d pc_sphere_color;
 Eigen::Vector4d pc_orig_color;
 bool plot_pc_orig;
 bool plot_pc_sphere;
 bool plot_normals;
+bool plot_triads;
+bool plot_planes;
 
 bool debug_mode;
 
@@ -91,11 +102,16 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("visualization/normals_color/b", normals_color(2), 1.0);
   n.param("visualization/normals_color/a", normals_color(3), 1.0);
   n.param("visualization/normals_scale", normals_scale, 0.01);
+  n.param("visualization/triads_scale", triads_scale, 0.01);
+  n.param("visualization/planes_scale", planes_scale, 1.0);
   n.param("visualization/normals_norm", normals_norm, 1.0);
+  n.param("visualization/triads_norm", triads_norm, 1.0);
   n.param("visualization/normals_skip", normals_skip, 10);
   n.param("visualization/plot_pc_orig", plot_pc_orig, true);
   n.param("visualization/plot_pc_sphere", plot_pc_sphere, true);
   n.param("visualization/plot_normals", plot_normals, true);
+  n.param("visualization/plot_triads", plot_triads, true);
+  n.param("visualization/plot_planes", plot_planes, true);
 
   n.param("debug_mode", debug_mode, false);
 
@@ -116,6 +132,9 @@ int setup_messaging_interface(ros::NodeHandle &n)
 
   velodyne_subs	 = n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
   rviz_publ      = n.advertise<visualization_msgs::MarkerArray>("markers", 10);
+  normals_publ      = n.advertise<visualization_msgs::Marker>("normals", 10);
+  triads_publ      = n.advertise<visualization_msgs::Marker>("triads", 10);
+  planes_publ      = n.advertise<visualization_msgs::MarkerArray>("planes", 10);
   pc_orig_publ   = n.advertise<PointCloud> ("pc_orig", 1);
   pc_sphere_publ = n.advertise<PointCloud> ("pc_sphere", 1);
   pc_sphere_normals_publ = n.advertise<PointCloud> ("pc_sphere_normals", 1);
@@ -191,8 +210,12 @@ void publish_rviz_msgs(){
   if(plot_normals && pc2surfs.get_normals(pc_sphere_normals)){
     int num_pts = pc_sphere_normals->points.size();
     marker.points.clear();
+    marker.colors.clear();
+    marker.colors.reserve(num_pts * 2);
     marker.points.reserve(num_pts * 2);
     marker.type = visualization_msgs::Marker::LINE_LIST;
+    marker.header.seq++;
+    marker.id++;
     marker.scale.x = normals_scale;
     marker.scale.y = normals_scale;
     marker.scale.z = normals_scale;
@@ -216,20 +239,140 @@ void publish_rviz_msgs(){
       marker.points.push_back(pt1);
       marker.points.push_back(pt2);
     }
-    markers.markers.push_back(marker);
-    /*
-       pc_sphere_normals->header.frame_id = "velodyne";
-       pc_sphere_normals->height = 1;
-       pc_sphere_normals->width = pc_sphere_normals->points.size();
-       pc_sphere_normals->header.stamp = ros::Time::now().toSec();
-       pc_sphere_normals_publ.publish(*pc_sphere_normals);
-       */
+    normals_publ.publish(marker);
   }
-  // Initial axis estimate
+
   std::map<int, Eigen::Vector3d> segment_origins;
   std::map<int, Eigen::Matrix3d> segment_triads;
   std::map<int, Eigen::VectorXd> segment_contours;
   pc2surfs.get_segments(segment_origins, segment_triads, segment_contours);
+
+  if(plot_triads){
+    int num_segments = segment_origins.size();
+    marker.points.clear();
+    marker.colors.clear();
+    marker.points.reserve(num_segments);
+    marker.colors.reserve(num_segments);
+    marker.type = visualization_msgs::Marker::LINE_LIST;
+    marker.header.seq++;
+    marker.id++;
+    marker.scale.x = triads_scale;
+    marker.scale.y = triads_scale;
+    marker.scale.z = triads_scale;
+
+    std_msgs::ColorRGBA red, green, blue;
+    red.r = 1; 
+    green.g = 1;
+    blue.b = 1;
+    red.a = green.a = blue.a = 1;
+
+    Eigen::Vector3d origin;
+    Eigen::Matrix3d triad;
+    geometry_msgs::Point pt1, pt2;
+
+    bool goon = true;
+    for(int seg = 0 ; goon ; seg++){
+      goon = false;
+      auto it = segment_origins.find(seg);
+      if(it != segment_origins.end()){
+        origin = it->second;
+        triad  = segment_triads[seg] * triads_norm;
+        pt1.x = origin(0); pt1.y = origin(1); pt1.z = origin(2);
+        pt2.x = pt1.x + triad(0, 0); pt2.y = pt1.y + triad(1, 0); pt2.z = pt1.z + triad(2, 0);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(red);
+        marker.colors.push_back(red);
+        pt2.x = pt1.x + triad(0, 1); pt2.y = pt1.y + triad(1, 1); pt2.z = pt1.z + triad(2, 1);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(green);
+        marker.colors.push_back(green);
+        pt2.x = pt1.x + triad(0, 2); pt2.y = pt1.y + triad(1, 2); pt2.z = pt1.z + triad(2, 2);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(blue);
+        marker.colors.push_back(blue);
+        goon = true;
+      }
+
+      it = segment_origins.find(-seg);
+      if(seg != 0 && it != segment_origins.end()){
+        origin = it->second;
+        triad  = segment_triads[seg] * triads_norm;
+        pt1.x = origin(0); pt1.y = origin(1); pt1.z = origin(2);
+        pt2.x = pt1.x + triad(0, 0); pt2.y = pt1.y + triad(1, 0); pt2.z = pt1.z + triad(2, 0);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(red);
+        marker.colors.push_back(red);
+        pt2.x = pt1.x + triad(0, 1); pt2.y = pt1.y + triad(1, 1); pt2.z = pt1.z + triad(2, 1);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(green);
+        marker.colors.push_back(green);
+        pt2.x = pt1.x + triad(0, 2); pt2.y = pt1.y + triad(1, 2); pt2.z = pt1.z + triad(2, 2);
+        marker.points.push_back(pt1); marker.points.push_back(pt2);
+        marker.colors.push_back(blue);
+        marker.colors.push_back(blue);
+        goon = true;
+      }
+    }
+    triads_publ.publish(marker);
+  }
+
+  if(plot_planes){
+    markers.markers.clear();
+    marker.colors.clear();
+    marker.type = visualization_msgs::Marker::CUBE;
+    marker.scale.x = 0.01;
+    marker.scale.y = planes_scale;
+    marker.scale.z = planes_scale;
+
+    Eigen::Vector3d origin;
+    Eigen::Matrix3d triad;
+    geometry_msgs::Point pt;
+    pt.x = pt.y = pt.z = 0;
+    marker.points.clear();
+    marker.points.push_back(pt);
+    marker.colors.clear();
+    marker.color.a = 0.3;
+    marker.color.r = 0.1;
+    marker.color.g = 0.1;
+    marker.color.b = 0.1;
+
+    bool goon = true;
+    for(int seg = 0 ; goon ; seg++){
+      goon = false;
+      auto it = segment_origins.find(seg);
+      if(it != segment_origins.end()){
+        origin = it->second;
+        triad = segment_triads[seg];
+        marker.header.seq++;
+        marker.id++;
+        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+        marker.pose.position.x = origin(0);
+        marker.pose.position.y = origin(1);
+        marker.pose.position.z = origin(2);
+        // marker.colors.push_back(red);
+        markers.markers.push_back(marker);
+        goon = true;
+      }
+
+      it = segment_origins.find(-seg);
+      if(seg != 0 && it != segment_origins.end()){
+        origin = it->second;
+        triad = segment_triads[seg];
+        marker.header.seq++;
+        marker.id++;
+        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+        marker.pose.position.x = origin(0);
+        marker.pose.position.y = origin(1);
+        marker.pose.position.z = origin(2);
+        // marker.colors.push_back(red);
+        markers.markers.push_back(marker);
+        goon = true;
+      }
+    }
+    planes_publ.publish(markers);
+  }
+
+  // Initial axis estimate
 
 
 
@@ -247,6 +390,8 @@ void publish_rviz_msgs(){
   //
 
   //
-  rviz_publ.publish(markers);
+  //rviz_publ.publish(markers);
+  //
+  seq = marker.header.seq;
 }
 

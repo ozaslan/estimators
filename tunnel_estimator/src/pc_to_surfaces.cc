@@ -568,7 +568,7 @@ int PC2Surfaces::_init_triad(int seg){
   if(triad(0, 0) != 0)
     triad.col(0) *= SGN(triad(0,0));
   triad.col(1) << 0, 0, 1;
-  triad.col(1) = triad.col(0).cross(triad.col(1));
+  triad.col(1) = -triad.col(0).cross(triad.col(1));
   triad.col(1) /= triad.col(1).norm();
   triad.col(2) = triad.col(0).cross(triad.col(1));
 
