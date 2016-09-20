@@ -4,6 +4,8 @@ visualization:
   plot_normals: true
   plot_triads: true
   plot_planes: true
+  plot_segments: true
+  plot_cylinders: true
   pc_orig_color:
     r: 1.0
     g: 1.0
@@ -19,11 +21,14 @@ visualization:
     g: 0.3
     b: 0.0
     a: 0.8
+  cylinders_alpha: 0.9
+  cylinders_line_scale: 0.05
+  cylinders_resolution: 30
   normals_scale: 0.03
   normals_norm: 0.45
-  normals_skip: 5
+  normals_skip: 1
   triads_scale: 0.05
   triads_norm: 1.0
-  planes_scale: 5.0
+  planes_scale: 6.50
 
 

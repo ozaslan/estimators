@@ -15,6 +15,9 @@
 #define DEBUG_MSG_TEXT (string(__func__) + " " + to_string(__LINE__))
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+typedef pcl::PointCloud<pcl::PointXYZRGB> ColoredPointCloud;
+
+utils::colors::Colors colors;
 
 ros::Publisher rviz_publ, 
   pc_orig_publ, 
@@ -22,7 +25,9 @@ ros::Publisher rviz_publ,
   pc_sphere_normals_publ,
   normals_publ,
   triads_publ,
-  planes_publ;
+  planes_publ,
+  segments_publ,
+  cylinders_publ;
 ros::Subscriber velodyne_subs;
 sensor_msgs::PointCloud2 velodyne_msg;
 
@@ -46,13 +51,20 @@ double planes_scale;
 int normals_skip;
 Eigen::Vector4d pc_sphere_color;
 Eigen::Vector4d pc_orig_color;
+double cylinders_alpha;
+double cylinders_line_scale;
+int cylinders_resolution;
 bool plot_pc_orig;
 bool plot_pc_sphere;
 bool plot_normals;
 bool plot_triads;
 bool plot_planes;
+bool plot_cylinders;
+bool plot_segments;
 
 bool debug_mode;
+
+PC2SurfacesParams params;
 
 int main(int argc, char** argv)
 {
@@ -71,7 +83,6 @@ int main(int argc, char** argv)
 
 void process_inputs(const ros::NodeHandle &n)
 {
-  PC2SurfacesParams params;
   n.param("pc2surfaces/max_inner_iter", params.max_inner_iter, 33);
   n.param("pc2surfaces/max_outer_iter", params.max_outer_iter, 33);
   n.param("pc2surfaces/term_perc_crit", params.term_perc_crit, 0.05);
@@ -101,9 +112,12 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("visualization/normals_color/g", normals_color(1), 1.0);
   n.param("visualization/normals_color/b", normals_color(2), 1.0);
   n.param("visualization/normals_color/a", normals_color(3), 1.0);
+  n.param("visualization/cylinders_alpha", cylinders_alpha, 0.7);
   n.param("visualization/normals_scale", normals_scale, 0.01);
   n.param("visualization/triads_scale", triads_scale, 0.01);
   n.param("visualization/planes_scale", planes_scale, 1.0);
+  n.param("visualization/cylinders_line_scale", cylinders_line_scale, 0.01);
+  n.param("visualization/cylinders_resolution", cylinders_resolution, 30);
   n.param("visualization/normals_norm", normals_norm, 1.0);
   n.param("visualization/triads_norm", triads_norm, 1.0);
   n.param("visualization/normals_skip", normals_skip, 10);
@@ -112,6 +126,8 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("visualization/plot_normals", plot_normals, true);
   n.param("visualization/plot_triads", plot_triads, true);
   n.param("visualization/plot_planes", plot_planes, true);
+  n.param("visualization/plot_cylinders", plot_cylinders, true);
+  n.param("visualization/plot_segments", plot_segments, true);
 
   n.param("debug_mode", debug_mode, false);
 
@@ -121,6 +137,8 @@ void process_inputs(const ros::NodeHandle &n)
   ROS_INFO("[debug_mode] : [%s]", debug_mode ? "TRUE" : "FALSE");
   params.print();
   ROS_INFO(" ------------------------------------------");
+
+  pc2surfs.set_params(params);
 }
 
 int setup_messaging_interface(ros::NodeHandle &n)
@@ -132,11 +150,13 @@ int setup_messaging_interface(ros::NodeHandle &n)
 
   velodyne_subs	 = n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
   rviz_publ      = n.advertise<visualization_msgs::MarkerArray>("markers", 10);
-  normals_publ      = n.advertise<visualization_msgs::Marker>("normals", 10);
-  triads_publ      = n.advertise<visualization_msgs::Marker>("triads", 10);
-  planes_publ      = n.advertise<visualization_msgs::MarkerArray>("planes", 10);
+  cylinders_publ = n.advertise<visualization_msgs::MarkerArray>("cylinders", 10);
+  normals_publ   = n.advertise<visualization_msgs::Marker>("normals", 10);
+  triads_publ    = n.advertise<visualization_msgs::Marker>("triads", 10);
+  planes_publ    = n.advertise<visualization_msgs::MarkerArray>("planes", 10);
   pc_orig_publ   = n.advertise<PointCloud> ("pc_orig", 1);
   pc_sphere_publ = n.advertise<PointCloud> ("pc_sphere", 1);
+  segments_publ  = n.advertise<ColoredPointCloud> ("pc_segments", 1);
   pc_sphere_normals_publ = n.advertise<PointCloud> ("pc_sphere_normals", 1);
   return 0;
 }
@@ -372,9 +392,183 @@ void publish_rviz_msgs(){
     planes_publ.publish(markers);
   }
 
-  // Initial axis estimate
+  if(plot_segments){
+    ColoredPointCloud colored_segments;
+    PointCloud pc;
+    ColoredPointCloud color_pc;
+    Eigen::Vector3d color;
+    uint32_t rgb;
+    int r, g, b;
 
+    bool goon = true;
+    for(int seg = 0 ; goon ; seg++){
+      goon = false;
+      if(pc2surfs.get_segment_pc(seg, pc)){
+        pcl::copyPointCloud(pc, color_pc);
+        color = colors[2 * (seg + 2)] * 255;
+        r = color(0); g = color(1); b = color(2);
 
+        //cout << "PC Color[" << seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+
+        rgb = (static_cast<uint32_t>(r) << 16 |
+            static_cast<uint32_t>(g) << 8  |
+            static_cast<uint32_t>(b));
+        for(auto &pt : color_pc.points)
+          pt.rgb = *reinterpret_cast<float*>(&rgb);
+
+        colored_segments += color_pc;
+        goon = true;
+      }
+
+      if(seg != 0 && pc2surfs.get_segment_pc(-seg, pc)){
+        pcl::copyPointCloud(pc, color_pc);
+        color = colors[2 * (seg + 2) + 1] * 255;
+        r = color(0); g = color(1); b = color(2);
+
+        //cout << "PC Color[" << -seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+
+        rgb = (static_cast<uint32_t>(r) << 16 |
+            static_cast<uint32_t>(g) << 8  |
+            static_cast<uint32_t>(b));
+        for(auto &pt : color_pc.points)
+          pt.rgb = *reinterpret_cast<float*>(&rgb);
+
+        colored_segments += color_pc;
+        goon = true;
+      }
+    }
+
+    colored_segments.header.frame_id = "velodyne";
+    colored_segments.height = 1;
+    colored_segments.width = colored_segments.points.size();
+    colored_segments.header.stamp = ros::Time::now().toSec();
+
+    segments_publ.publish(colored_segments);
+  }
+
+  if(plot_cylinders){
+    markers.markers.clear();
+    marker.colors.clear();
+    marker.type = visualization_msgs::Marker::LINE_LIST;
+    marker.scale.z = params.segment_len;
+
+    Eigen::Vector3d origin;
+    Eigen::Matrix3d triad;
+    Eigen::MatrixXd contour;
+    Eigen::Vector3d color;
+    marker.points.clear();
+    marker.colors.clear();
+    marker.color.a = cylinders_alpha;
+    marker.scale.x = marker.scale.y = marker.scale.z = cylinders_line_scale;
+    double R;
+
+    vector<Eigen::Vector3d> cylinder_pts;
+    cylinder_pts.reserve(cylinders_resolution);
+    for(int i = 0 ; i <= cylinders_resolution ; i++){
+      double theta = 2.0 * i / cylinders_resolution * M_PI;
+      Eigen::Vector3d pt(-params.segment_len / 2, cos(theta), sin(theta));
+      cylinder_pts.push_back(pt);
+    }
+
+    bool goon = true;
+    for(int seg = 0 ; goon ; seg++){
+      goon = false;
+      auto it = segment_origins.find(seg);
+      if(it != segment_origins.end()){
+        origin = it->second;
+        triad = segment_triads[seg];
+        R = segment_contours[seg](2);
+        marker.header.seq++;
+        marker.id++;
+        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+        marker.pose.position.x = origin(0);
+        marker.pose.position.y = origin(1);
+        marker.pose.position.z = origin(2);
+        color = colors[2 * (seg + 2)];
+        marker.color.r = color(0);
+        marker.color.g = color(1);
+        marker.color.b = color(2);
+
+        //cout << "Cyl. Color[" << seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+
+        marker.points.clear();
+        for(int i = 0 ; i < cylinders_resolution ; i++){
+          geometry_msgs::Point pt1, pt2;
+          pt1.x = cylinder_pts[i](0);
+          pt1.y = cylinder_pts[i](1) * R;
+          pt1.z = cylinder_pts[i](2) * R;
+          pt2.x = cylinder_pts[i + 1](0);
+          pt2.y = cylinder_pts[i + 1](1) * R;
+          pt2.z = cylinder_pts[i + 1](2) * R;
+
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+
+          pt2.x += params.segment_len;
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+
+          marker.points.push_back(pt1);
+          pt1.x += params.segment_len;
+          marker.points.push_back(pt1);
+
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+        }
+
+        markers.markers.push_back(marker);
+        goon = true;
+      }
+
+      it = segment_origins.find(-seg);
+      if(seg != 0 && it != segment_origins.end()){
+        origin = it->second;
+        triad = segment_triads[-seg];
+        R = segment_contours[-seg](2);
+        marker.header.seq++;
+        marker.id++;
+        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+        marker.pose.position.x = origin(0);
+        marker.pose.position.y = origin(1);
+        marker.pose.position.z = origin(2);
+        color = colors[2 * (seg + 2) + 1];
+        marker.color.r = color(0);
+        marker.color.g = color(1);
+        marker.color.b = color(2);
+
+        //cout << "Cyl. Color[" << -seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+
+        marker.points.clear();
+        for(int i = 0 ; i < cylinders_resolution ; i++){
+          geometry_msgs::Point pt1, pt2;
+          pt1.x = cylinder_pts[i](0);
+          pt1.y = cylinder_pts[i](1) * R;
+          pt1.z = cylinder_pts[i](2) * R;
+          pt2.x = cylinder_pts[i + 1](0);
+          pt2.y = cylinder_pts[i + 1](1) * R;
+          pt2.z = cylinder_pts[i + 1](2) * R;
+
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+
+          pt2.x += params.segment_len;
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+
+          marker.points.push_back(pt1);
+          pt1.x += params.segment_len;
+          marker.points.push_back(pt1);
+
+          marker.points.push_back(pt1);
+          marker.points.push_back(pt2);
+        }
+
+        markers.markers.push_back(marker);
+        goon = true;
+      }
+    }
+    cylinders_publ.publish(markers);
+  }
 
   // Iterate through segments
   // - Project onto prev triad

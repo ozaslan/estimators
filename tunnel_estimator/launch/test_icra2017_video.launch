@@ -17,7 +17,7 @@
   <arg name="bagfile_path" value="$(arg bagfile_path00)"/>
   <arg name="debug_mode"   value="TRUE"/>
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.10 --start=0 --duration=999 --quiet">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.80 --start=0 --duration=999 --quiet">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
