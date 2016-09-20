@@ -131,10 +131,13 @@ target_link_libraries(visual_1d_odom ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OPEN
 
 ## Declare a C++ executable
 add_executable(test_pc_to_surfaces test/test_pc_to_surfaces.cc)
+add_executable(test_icra2017_video test/test_icra2017_video.cc)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-target_link_libraries(test_pc_to_surfaces ${catkin_LIBRARIES} pc_to_surfaces visual_1d_odom calib_params)
+target_link_libraries(test_pc_to_surfaces ${catkin_LIBRARIES} pc_to_surfaces)
+target_link_libraries(test_icra2017_video ${catkin_LIBRARIES} pc_to_surfaces)
+# target_link_libraries(test_pc_to_surfaces ${catkin_LIBRARIES} pc_to_surfaces visual_1d_odom calib_params)
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(tunnel_estimator_node

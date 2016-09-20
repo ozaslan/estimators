@@ -448,6 +448,7 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
   //_x_disp /= 1.5;
 
 	cout << "_x_disp = " << _x_disp << " _x_var = " << _x_var << endl;
+  x_disp = _x_disp;
   /*
   double perc = 0.75;
   for(int i = 0 ; i < histogram.size() ; i++){

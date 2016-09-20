@@ -12,10 +12,10 @@
   <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04.bag"/>
   <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05.bag"/>
 
-  <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
-  <arg name="debug_mode"   value="FALSE"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path00)"/>
+  <arg name="debug_mode"   value="TRUE"/>
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.30 --start=13 --duration=999 --quiet">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.0 --start=0 --duration=999 --quiet">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
@@ -30,7 +30,7 @@
     <param name="debug_mode" value="$(arg debug_mode)"/>
     
     <remap from="~/velodyne_points" to="/velodyne_points"/>
-    <remap from="~/cam" to="/cam/top_left/compressed"/>
+    <remap from="~/cam" to="/cam/top_left/compressedAAAAAAA"/>
 
     <param name="top_left_cam_calib_file"		  value="$(find calib_data)/camera/inspot_top_left_cam.yaml"/>
 		<param name="top_right_cam_calib_file"		value="$(find calib_data)/camera/inspot_top_right_cam.yaml"/>

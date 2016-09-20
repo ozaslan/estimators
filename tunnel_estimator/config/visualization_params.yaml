@@ -1,0 +1,24 @@
+visualization:
+  plot_pc_orig: true
+  plot_pc_sphere: true
+  plot_normals: true
+  pc_orig_color:
+    r: 1.0
+    g: 1.0
+    b: 1.0
+    a: 0.3
+  pc_sphere_color:
+    r: 1.0
+    g: 0.3
+    b: 0.3
+    a: 0.3
+  normals_color:
+    r: 1.0
+    g: 0.3
+    b: 0.0
+    a: 0.8
+  normals_scale: 0.03
+  normals_norm: 0.45
+  normals_skip: 5
+
+

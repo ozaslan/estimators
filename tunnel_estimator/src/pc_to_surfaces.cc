@@ -140,6 +140,12 @@ int PC2Surfaces::_fit_normals(){
     _normal_eigenpairs[i].second = es.eigenvectors();
     es.eigenvalues().minCoeff(&min_eval_ind);
     _normal_min_eigval_ind[i] = min_eval_ind;
+
+    if(_normal_eigenpairs[i].second(0, min_eval_ind) * _pc_sphere->points[i].x +
+       _normal_eigenpairs[i].second(1, min_eval_ind) * _pc_sphere->points[i].y +
+       _normal_eigenpairs[i].second(2, min_eval_ind) * _pc_sphere->points[i].z > 0)
+      _normal_eigenpairs[i].second *= -1;
+
     _pc_sphere_normals->points[i].normal_x = _normal_eigenpairs[i].second(0, min_eval_ind);
     _pc_sphere_normals->points[i].normal_y = _normal_eigenpairs[i].second(1, min_eval_ind);
     _pc_sphere_normals->points[i].normal_z = _normal_eigenpairs[i].second(2, min_eval_ind);
@@ -386,28 +392,28 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
         db(j) = -2 * _pc_projections[i](dim);
 
         // Calculate dX
-        
-        /*
-        Eigen::MatrixXd Temp01 = V * D_inv;
-        Eigen::MatrixXd Temp02 = D_inv * U.transpose();
-        Eigen::MatrixXd Temp03 = U.transpose() * b;
-        Eigen::MatrixXd Temp04 = Temp01 * U.transpose();
-        Eigen::MatrixXd Temp05 = D_inv_sqr * Temp03;
-        Eigen::MatrixXd Temp06 = Temp02 * b;
-        Eigen::MatrixXd Temp07 = V * Temp02;
 
-        dX.col(dim) = 
-          V * D_inv          * dU.transpose() *  b +
-          V * dD * D_inv_sqr *  U.transpose() *  b +
-          dV * D_inv          *  U.transpose() *  b +
-          V * D_inv          *  U.transpose() * db;
-        */
+        /*
+           Eigen::MatrixXd Temp01 = V * D_inv;
+           Eigen::MatrixXd Temp02 = D_inv * U.transpose();
+           Eigen::MatrixXd Temp03 = U.transpose() * b;
+           Eigen::MatrixXd Temp04 = Temp01 * U.transpose();
+           Eigen::MatrixXd Temp05 = D_inv_sqr * Temp03;
+           Eigen::MatrixXd Temp06 = Temp02 * b;
+           Eigen::MatrixXd Temp07 = V * Temp02;
+
+           dX.col(dim) = 
+           V * D_inv          * dU.transpose() *  b +
+           V * dD * D_inv_sqr *  U.transpose() *  b +
+           dV * D_inv          *  U.transpose() *  b +
+           V * D_inv          *  U.transpose() * db;
+           */
         dX.col(dim) = 
           Temp01 * dU.transpose() *  b +
           V * dD * Temp05 +
           dV * Temp06 +
           Temp07 * db;
-        
+
       }
 
       // Calculate dxc, dyc, dR
@@ -670,11 +676,16 @@ int PC2Surfaces::visualize_fit(){
     pt2.y = pt1.y + _segment_triad_map[seg](1, 0) * 1;
     pt2.z = pt1.z + _segment_triad_map[seg](2, 0) * 1;
 
-    //cout << __func__ << " : " << endl << _segment_triad_map[seg] << endl;
+    if(!isfinite(pt1.x + pt1.y + pt1.z + pt2.x + pt2.y + pt2.z) ||
+        fabs(pt1.x) > 100 ||
+        fabs(pt1.y) > 100 ||
+        fabs(pt1.z) > 100 ||
+        fabs(pt2.x) > 100 ||
+        fabs(pt2.y) > 100 ||
+        fabs(pt2.z) > 100)
+      continue;
 
     _viewer->addArrow(pt2, pt1, r, g, b, false, "arrow_seg" + to_string(seg));
-
-    //_viewer->addCoordinateSystem (1, const Eigen::Affine3f &t, "ref_seg" + to_string(seg));
   }
 
   _viewer->removeAllCoordinateSystems();
@@ -726,8 +737,6 @@ int PC2Surfaces::visualize_fit(){
 
   _viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pc_sphere_color");
 
-  _viewer->addSphere (pcl::PointXYZ(10, 10, 10), 3);
-
   if(!_viewer->wasStopped ())
     _viewer->spinOnce(1);
 
@@ -745,7 +754,24 @@ int PC2Surfaces::get_segment_pc(int seg, pcl::PointCloud<pcl::PointXYZ> &pc){
 
   return pc.points.size();
 }
-    
+
+int PC2Surfaces::get_projections(int seg, vector<Eigen::Vector3d> &proj, vector<bool> &outliers){
+  int num_pts = 0;
+  for(auto ind : _segment_ids)
+    num_pts += ind == seg;
+  proj.clear();
+  outliers.clear();
+  proj.reserve(num_pts);
+  outliers.reserve(num_pts);
+  for(int i = 0 ; i < num_pts ; i++)
+    if(_segment_ids[i] == seg){
+      proj.push_back(_pc_projections[i]);
+      outliers.push_back(_outliers[i]);
+    }
+  return num_pts;
+}
+
+
 PC2SurfacesParams::PC2SurfacesParams(){
   max_inner_iter = 9;
   max_outer_iter = 5;
