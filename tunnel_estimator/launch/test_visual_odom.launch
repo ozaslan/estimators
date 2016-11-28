@@ -3,7 +3,7 @@
 
 -->
 <launch>
-  <param name="use_sim_time" value="true" />
+  <param name="use_sim_time" value="false" />
 
   <arg name="bagfile_path00" value="/home/ozaslan/storage/inspot_2016-07-12-17-11-26.bag"/>
   <arg name="bagfile_path01" value="/home/ozaslan/inspot_2016-07-13-14-14-52.bag"/>
@@ -13,19 +13,8 @@
   <arg name="bagfile_path05" value="$(env ROS_DATASET_PATH)/inspot/towne03.bag"/>
   <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04.bag"/>
   <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05.bag"/>
-  <arg name="bagfile_path08" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-23-49.bag"/>
-  <arg name="bagfile_path09" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-14-57-18.bag"/>
-  <arg name="bagfile_path10" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-02-30.bag"/>
-  <arg name="bagfile_path11" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-10-52.bag"/> 
-  <arg name="bagfile_path12" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-27-59.bag"/>
-  <arg name="bagfile_path13" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-14-58-42.bag"/>
-  <arg name="bagfile_path14" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-07-33.bag"/>
-  <arg name="bagfile_path15" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-23-08.bag"/>
-  <arg name="bagfile_path16" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-01-44.bag"/>
-  <arg name="bagfile_path17" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-08-30.bag"/> 
 
-
-  <arg name="bagfile_path" value="$(arg bagfile_path11)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
   <arg name="debug_mode"   value="TRUE"/>
 
   <arg name="use_gdb" value="FALSE" />
@@ -37,25 +26,34 @@
   </group>
 
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.00 --start=0 --duration=555 ">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="  $(arg bagfile_path) --rate=1.500 --start=0 --duration=999 ">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
     <remap from="/quadruple/top_left/image_raw/compressed"     to="/cam/top_left/compressed"/>
-    <remap from="/quadruple/top_right/image_raw/compressed"    to="/cam/top_right/compressed"/>
+    <remap from="/quadruple/top_right/image_raw/compressed"    to="/cam/top_right/compressed"/> 
   </node>
 
-  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_icra2017_video.rviz"/>
+  <node pkg="rvizZZZ" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_icra2017_video.rviz"/>
+  
+  <node pkg="image_transport" name="republish0" type="republish" output="screen"
+        args="compressed in:=/cam/bottom_left raw out:=/cam/bottom_left" />
+  <node pkg="image_transport" name="republish1" type="republish" output="screen"
+        args="compressed in:=/cam/bottom_right raw out:=/cam/bottom_right" />
+  <node pkg="image_transport" name="republish2" type="republish" output="screen"
+        args="compressed in:=/cam/top_left raw out:=/cam/top_left" />
+  <node pkg="image_transport" name="republish3" type="republish" output="screen"
+        args="compressed in:=/cam/top_right raw out:=/cam/top_right" />
 
-  <node pkg="tunnel_estimator" name="test_icra2017_video" type="test_icra2017_video" output="screen">
+
+  <node pkg="tunnel_estimator" name="test_visual_odom" type="test_visual_odom" output="screen">
     <!-- launch-prefix="$(arg gdb_launch_prefix)" -->
     <rosparam file="$(find tunnel_estimator)/config/pc_to_surfaces_params.yaml"/>
     <rosparam file="$(find tunnel_estimator)/config/visualization_params.yaml"/>
     <param name="debug_mode" value="$(arg debug_mode)"/>
     
-    <remap from="~/velodyne_points" to="/velodyne_points"/>
-    <remap from="~/imu" to="/mavros/imu/data"/>
-    <remap from="~/cam" to="/cam/top_left/compressed"/>
+    <remap from="~/velodyne_points" to="/velodyne_pointsSSSSS"/>
+    <remap from="~/cam" to="/cam/top_right"/>
 
     <param name="top_left_cam_calib_file"		  value="$(find calib_data)/camera/inspot_top_left_cam.yaml"/>
 		<param name="top_right_cam_calib_file"		value="$(find calib_data)/camera/inspot_top_right_cam.yaml"/>

@@ -40,7 +40,6 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
   sor.setLeafSize (vls, vls, vls);
   sor.filter (*_pc_orig);
 
-
   if(_pc_sphere == NULL)
     _pc_sphere = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -68,6 +67,42 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
     //cout << "Origin[" << seg << "] : " << endl << _segment_origin_map[seg] << endl;
     _filter_segment(-seg);
     _fit_segment(-seg);
+  }
+
+  _valid_segs.clear();
+  _valid_segs.push_back(0);
+  for(int seg = 0 ; true ; seg++){
+    auto it0 = _segment_origin_map.find(seg);
+    auto it1 = _segment_origin_map.find(seg + 1);
+    if(it0 != _segment_origin_map.end() && it1 != _segment_origin_map.end()){
+      if( (it0->second - it1->second).norm() < _params.max_segment_dist * _params.segment_len){
+        auto triad0 = _segment_triad_map[seg];
+        auto triad1 = _segment_triad_map[seg + 1];
+        if(utils::trans::dcm2aaxis(triad0.transpose() * triad1).norm() < _params.max_segment_rot)
+          _valid_segs.push_back(seg + 1);
+        else
+          break;
+      } else
+        break;
+    } else
+      break;
+  }
+
+  for(int seg = 0 ; true ; seg--){
+    auto it0 = _segment_origin_map.find(seg);
+    auto it1 = _segment_origin_map.find(seg - 1);
+    if(it0 != _segment_origin_map.end() && it1 != _segment_origin_map.end()){
+      if( (it0->second - it1->second).norm() < _params.max_segment_dist * _params.segment_len){
+        auto triad0 = _segment_triad_map[seg];
+        auto triad1 = _segment_triad_map[seg - 1];
+        if(utils::trans::dcm2aaxis(triad0.transpose() * triad1).norm() < _params.max_segment_rot)
+          _valid_segs.push_back(seg - 1);
+        else
+          break;
+      } else
+          break;
+    } else
+      break;
   }
 
   //TOC(__func__);
@@ -142,8 +177,8 @@ int PC2Surfaces::_fit_normals(){
     _normal_min_eigval_ind[i] = min_eval_ind;
 
     if(_normal_eigenpairs[i].second(0, min_eval_ind) * _pc_sphere->points[i].x +
-       _normal_eigenpairs[i].second(1, min_eval_ind) * _pc_sphere->points[i].y +
-       _normal_eigenpairs[i].second(2, min_eval_ind) * _pc_sphere->points[i].z > 0)
+        _normal_eigenpairs[i].second(1, min_eval_ind) * _pc_sphere->points[i].y +
+        _normal_eigenpairs[i].second(2, min_eval_ind) * _pc_sphere->points[i].z > 0)
       _normal_eigenpairs[i].second *= -1;
 
     _pc_sphere_normals->points[i].normal_x = _normal_eigenpairs[i].second(0, min_eval_ind);
@@ -269,7 +304,7 @@ int PC2Surfaces::_fit_segment(int seg){
   if(success){
     Eigen::Vector3d contour = _segment_contour_map[seg];
     Eigen::Vector3d dcenter(0, contour(0), contour(1));
-    _segment_origin_map[seg] += _segment_triad_map[seg].transpose() * dcenter;
+    _segment_origin_map[seg] += _segment_triad_map[seg] * dcenter;
 
     _estimate_uncertainties(seg);
   }
@@ -297,6 +332,8 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
   int num_pts = _pc_sphere->points.size();
 
   Eigen::MatrixXd &A = _segment_contour_equ[seg].first;
+    if(A.rows() == 0)
+      return -1;
   Eigen::VectorXd &b = _segment_contour_equ[seg].second;
 
   JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
@@ -304,6 +341,7 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
   const Eigen::MatrixXd &V = svd.matrixV();
   Eigen::Matrix3d D;
   D.setZero();
+    //cout << A << endl;
   D.diagonal() = svd.singularValues();
   Eigen::Matrix3d D_inv = D.inverse();
   Eigen::Matrix3d D_inv_sqr = D_inv * D_inv;
@@ -322,7 +360,7 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
   omegaU.setZero();
   omegaV.setZero();
 
-  Eigen::Matrix3d &triad = _segment_triad_map[seg];
+  const Eigen::Matrix3d &triad = _segment_triad_map[seg];
 
   Eigen::Matrix3d err;
 
@@ -393,21 +431,6 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
 
         // Calculate dX
 
-        /*
-           Eigen::MatrixXd Temp01 = V * D_inv;
-           Eigen::MatrixXd Temp02 = D_inv * U.transpose();
-           Eigen::MatrixXd Temp03 = U.transpose() * b;
-           Eigen::MatrixXd Temp04 = Temp01 * U.transpose();
-           Eigen::MatrixXd Temp05 = D_inv_sqr * Temp03;
-           Eigen::MatrixXd Temp06 = Temp02 * b;
-           Eigen::MatrixXd Temp07 = V * Temp02;
-
-           dX.col(dim) = 
-           V * D_inv          * dU.transpose() *  b +
-           V * dD * D_inv_sqr *  U.transpose() *  b +
-           dV * D_inv          *  U.transpose() *  b +
-           V * D_inv          *  U.transpose() * db;
-           */
         dX.col(dim) = 
           Temp01 * dU.transpose() *  b +
           V * dD * Temp05 +
@@ -421,7 +444,6 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
       Eigen::MatrixXd temp = dcontour * dX;
       contour_uncertainty += temp * pt_uncertainty * temp.transpose();
 
-      DEBUG_MSG(DEBUG_MSG_TEXT);
       j++;
     }
   }
@@ -444,7 +466,7 @@ int PC2Surfaces::_project_pc(int seg){
       continue;
     pcl::PointXYZ pt = (*_pc_sphere)[i];
     _pc_projections[i] << pt.x, pt.y, pt.z;
-    _pc_projections[i] = triad * (_pc_projections[i] - origin);
+    _pc_projections[i] = triad.transpose() * (_pc_projections[i] - origin);
     num_projected_pts++;
   }
 
@@ -792,6 +814,8 @@ PC2SurfacesParams::PC2SurfacesParams(){
   var_r = 0.001;
   var_azimutal = 0.001;
   var_elevation = 0.001;
+  max_segment_dist = segment_len * 1.3;
+  max_segment_rot  = DEG2RAD(10);
 }
 
 void PC2SurfacesParams::print(){
@@ -808,4 +832,6 @@ void PC2SurfacesParams::print(){
   cout << "num_segments ------- : " << num_segments << endl;
   cout << "voxel_leaf_size ---- : " << voxel_leaf_size << endl;
   cout << "curvature_thres ---- : " << curvature_thres << endl;
+  cout << "max_segment_dist --- : " << max_segment_dist << endl;
+  cout << "max_segment_rot ---- : " << max_segment_rot << endl;
 }

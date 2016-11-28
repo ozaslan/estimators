@@ -5,6 +5,8 @@
 #include <pcl/point_types.h>
 
 
+#include <tf/transform_broadcaster.h>
+#include <nav_msgs/Odometry.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 
@@ -27,16 +29,23 @@ ros::Publisher rviz_publ,
   triads_publ,
   planes_publ,
   segments_publ,
-  cylinders_publ;
-ros::Subscriber velodyne_subs;
+  cylinders_publ,
+  sensor_frame_publ,
+  odom_publ;
+ros::Subscriber velodyne_subs, imu_subs;
 sensor_msgs::PointCloud2 velodyne_msg;
+nav_msgs::Odometry odom_msg;
+sensor_msgs::Imu imu_msg;
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr local_map = NULL;
+
 
 void process_inputs(const ros::NodeHandle &n);
 int  setup_messaging_interface(ros::NodeHandle &n);
 void velodyne_callback(const sensor_msgs::PointCloud2 &msg);
+void imu_callback(const sensor_msgs::Imu &msg);
 void publish_rviz_msgs();
+void publish_odom_msg();
 
 std::map<int, Eigen::Vector3d> segment_origins;
 std::map<int, Eigen::Matrix3d> segment_triads;
@@ -61,8 +70,11 @@ bool plot_triads;
 bool plot_planes;
 bool plot_cylinders;
 bool plot_segments;
+bool plot_sensor_frame;
+bool enable_pcl_viewer;
 
 bool debug_mode;
+bool imu_available = false;
 
 PC2SurfacesParams params;
 
@@ -99,6 +111,8 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("pc2surfaces/var_r", params.var_r, 0.001);
   n.param("pc2surfaces/var_azimutal", params.var_azimutal, 0.001);
   n.param("pc2surfaces/var_elevation", params.var_elevation, 0.001);
+  n.param("pc2surfaces/max_segment_dist", params.max_segment_dist, 1.2);
+  n.param("pc2surfaces/max_segment_rot", params.max_segment_rot, DEG2RAD(10));
 
   n.param("visualization/pc_orig_color/r", pc_orig_color(0), 1.0);
   n.param("visualization/pc_orig_color/g", pc_orig_color(1), 1.0);
@@ -128,6 +142,8 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("visualization/plot_planes", plot_planes, true);
   n.param("visualization/plot_cylinders", plot_cylinders, true);
   n.param("visualization/plot_segments", plot_segments, true);
+  n.param("visualization/plot_sensor_frame", plot_sensor_frame, true);
+  n.param("visualization/enable_pcl_viewer", enable_pcl_viewer, false);
 
   n.param("debug_mode", debug_mode, false);
 
@@ -149,17 +165,27 @@ int setup_messaging_interface(ros::NodeHandle &n)
   }
 
   velodyne_subs	 = n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
-  rviz_publ      = n.advertise<visualization_msgs::MarkerArray>("markers", 10);
+  imu_subs	 = n.subscribe("imu", 10, imu_callback, ros::TransportHints().tcpNoDelay());
+  rviz_publ      = n.advertise<visualization_msgs::Marker>("delete_markers", 10);
   cylinders_publ = n.advertise<visualization_msgs::MarkerArray>("cylinders", 10);
   normals_publ   = n.advertise<visualization_msgs::Marker>("normals", 10);
   triads_publ    = n.advertise<visualization_msgs::Marker>("triads", 10);
+  sensor_frame_publ = n.advertise<visualization_msgs::Marker>("sensor_frame", 10);
   planes_publ    = n.advertise<visualization_msgs::MarkerArray>("planes", 10);
   pc_orig_publ   = n.advertise<PointCloud> ("pc_orig", 1);
   pc_sphere_publ = n.advertise<PointCloud> ("pc_sphere", 1);
   segments_publ  = n.advertise<ColoredPointCloud> ("pc_segments", 1);
+  odom_publ      = n.advertise<nav_msgs::Odometry> ("odom", 1);
   pc_sphere_normals_publ = n.advertise<PointCloud> ("pc_sphere_normals", 1);
+
   return 0;
 }
+
+void imu_callback(const sensor_msgs::Imu &msg){
+  imu_msg = msg;
+  imu_available = true;
+}
+
 
 void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 {
@@ -172,13 +198,16 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
 
   pc2surfs.push_pc(pc);
   publish_rviz_msgs();
-  // pc2surfs.visualize_fit();
+  publish_odom_msg();
+  if(enable_pcl_viewer)
+    pc2surfs.visualize_fit();
 
   // pc2surfs.get_segments(segment_origins, segment_triads, segment_contours);
 }
 
 void publish_rviz_msgs(){
   static int seq = 0;
+  static int marker_id = 0;
   DEBUG_MSG(DEBUG_MSG_TEXT);
   // Declerations and initializations
   visualization_msgs::MarkerArray markers;
@@ -189,7 +218,7 @@ void publish_rviz_msgs(){
   marker.ns = "velodyne";
   marker.action = visualization_msgs::Marker::ADD;
   marker.pose.orientation.w = 1;
-  marker.lifetime = ros::Duration(0);
+  marker.lifetime = ros::Duration(0.3);
   marker.scale.x = 1.0;
   marker.scale.y = 1.0;
   marker.scale.z = 1.0;
@@ -198,6 +227,16 @@ void publish_rviz_msgs(){
   marker.color.b = 1.0;
   marker.color.a = 1.0;
 
+
+  marker.action = visualization_msgs::Marker::DELETE;
+  for(int i = 0 ; i <= marker_id * 100 ; i++){
+    marker.header.seq++;
+    marker.id = i;
+    rviz_publ.publish(marker);
+  }
+  marker.id = 0;
+  marker.header.stamp = ros::Time::now();
+  marker.action = visualization_msgs::Marker::ADD;
 
   // ---------------------------------------------------------- //
   vector<int>  ids;
@@ -211,18 +250,20 @@ void publish_rviz_msgs(){
   // Publish _pc_orig
   if(plot_pc_orig && pc2surfs.get_orig_pc(pc_orig)){
     pc_orig->header.frame_id = "velodyne";
+    pc_orig->header.seq = seq++;
     pc_orig->height = 1;
     pc_orig->width = pc_orig->points.size();
-    pc_orig->header.stamp = ros::Time::now().toSec();
+    pc_orig->header.stamp = ros::Time::now().toNSec();
     pc_orig_publ.publish(*pc_orig);
   }
   // Publish _pc_sphere 
   if((plot_pc_sphere || plot_normals) && pc2surfs.get_pc_sphere(pc_sphere)){
     if(plot_pc_sphere){
       pc_sphere->header.frame_id = "velodyne";
+      pc_sphere->header.seq = seq++;
       pc_sphere->height = 1;
       pc_sphere->width = pc_sphere->points.size();
-      pc_sphere->header.stamp = ros::Time::now().toSec();
+      pc_sphere->header.stamp = ros::Time::now().toNSec();
       pc_sphere_publ.publish(*pc_sphere);
     }
   }
@@ -296,7 +337,12 @@ void publish_rviz_msgs(){
       auto it = segment_origins.find(seg);
       if(it != segment_origins.end()){
         origin = it->second;
-        triad  = segment_triads[seg] * triads_norm;
+        triad  = segment_triads[seg];
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite()){
+          goon = true;
+          continue;
+        }
+        triad *= triads_norm;
         pt1.x = origin(0); pt1.y = origin(1); pt1.z = origin(2);
         pt2.x = pt1.x + triad(0, 0); pt2.y = pt1.y + triad(1, 0); pt2.z = pt1.z + triad(2, 0);
         marker.points.push_back(pt1); marker.points.push_back(pt2);
@@ -316,7 +362,12 @@ void publish_rviz_msgs(){
       it = segment_origins.find(-seg);
       if(seg != 0 && it != segment_origins.end()){
         origin = it->second;
-        triad  = segment_triads[seg] * triads_norm;
+        triad  = segment_triads[seg];
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite()){
+          goon = true;
+          continue;
+        }
+        triad *= triads_norm;
         pt1.x = origin(0); pt1.y = origin(1); pt1.z = origin(2);
         pt2.x = pt1.x + triad(0, 0); pt2.y = pt1.y + triad(1, 0); pt2.z = pt1.z + triad(2, 0);
         marker.points.push_back(pt1); marker.points.push_back(pt2);
@@ -363,6 +414,10 @@ void publish_rviz_msgs(){
       if(it != segment_origins.end()){
         origin = it->second;
         triad = segment_triads[seg];
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite()){
+          goon = true;
+          continue;
+        }
         marker.header.seq++;
         marker.id++;
         marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
@@ -378,6 +433,10 @@ void publish_rviz_msgs(){
       if(seg != 0 && it != segment_origins.end()){
         origin = it->second;
         triad = segment_triads[seg];
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite()){
+          goon = true;
+          continue;
+        }
         marker.header.seq++;
         marker.id++;
         marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
@@ -478,96 +537,156 @@ void publish_rviz_msgs(){
         origin = it->second;
         triad = segment_triads[seg];
         R = segment_contours[seg](2);
-        marker.header.seq++;
-        marker.id++;
-        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
-        marker.pose.position.x = origin(0);
-        marker.pose.position.y = origin(1);
-        marker.pose.position.z = origin(2);
-        color = colors[2 * (seg + 2)];
-        marker.color.r = color(0);
-        marker.color.g = color(1);
-        marker.color.b = color(2);
+        //cout << "R = " << R << endl;
+        //cout << "det = " << triad.determinant() << endl;
+        //cout << "seg = " << seg << endl;
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite() || !isfinite(R)){
+          goon = true;
+        } else {
+          marker.header.seq++;
+          marker.id++;
+          marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+          marker.pose.position.x = origin(0);
+          marker.pose.position.y = origin(1);
+          marker.pose.position.z = origin(2);
+          color = colors[2 * (seg + 2)];
+          marker.color.r = color(0);
+          marker.color.g = color(1);
+          marker.color.b = color(2);
 
-        //cout << "Cyl. Color[" << seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+          //cout << "Cyl. Color[" << seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
 
-        marker.points.clear();
-        for(int i = 0 ; i < cylinders_resolution ; i++){
-          geometry_msgs::Point pt1, pt2;
-          pt1.x = cylinder_pts[i](0);
-          pt1.y = cylinder_pts[i](1) * R;
-          pt1.z = cylinder_pts[i](2) * R;
-          pt2.x = cylinder_pts[i + 1](0);
-          pt2.y = cylinder_pts[i + 1](1) * R;
-          pt2.z = cylinder_pts[i + 1](2) * R;
+          marker.points.clear();
+          for(int i = 0 ; i < cylinders_resolution ; i++){
+            geometry_msgs::Point pt1, pt2;
+            pt1.x = cylinder_pts[i](0);
+            pt1.y = cylinder_pts[i](1) * R;
+            pt1.z = cylinder_pts[i](2) * R;
+            pt2.x = cylinder_pts[i + 1](0);
+            pt2.y = cylinder_pts[i + 1](1) * R;
+            pt2.z = cylinder_pts[i + 1](2) * R;
 
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
 
-          pt2.x += params.segment_len;
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            pt2.x += params.segment_len;
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
 
-          marker.points.push_back(pt1);
-          pt1.x += params.segment_len;
-          marker.points.push_back(pt1);
+            marker.points.push_back(pt1);
+            pt1.x += params.segment_len;
+            marker.points.push_back(pt1);
 
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
+          }
+
+          markers.markers.push_back(marker);
+          goon = true;
         }
-
-        markers.markers.push_back(marker);
-        goon = true;
       }
 
       it = segment_origins.find(-seg);
       if(seg != 0 && it != segment_origins.end()){
         origin = it->second;
         triad = segment_triads[-seg];
-        R = segment_contours[-seg](2);
-        marker.header.seq++;
-        marker.id++;
-        marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
-        marker.pose.position.x = origin(0);
-        marker.pose.position.y = origin(1);
-        marker.pose.position.z = origin(2);
-        color = colors[2 * (seg + 2) + 1];
-        marker.color.r = color(0);
-        marker.color.g = color(1);
-        marker.color.b = color(2);
+        //cout << "R = " << R << endl;
+        //cout << "det = " << triad.determinant() << endl;
+        //cout << "seg = " << seg << endl;
+        if(!triad.allFinite() || fabs(triad.determinant() - 1) > 0.01 || !origin.allFinite() || !isfinite(R)){
+          goon = true;
+        } else {
+          marker.header.seq++;
+          marker.id++;
+          marker.pose.orientation = utils::trans::quat2quat(utils::trans::dcm2quat(triad));
+          marker.pose.position.x = origin(0);
+          marker.pose.position.y = origin(1);
+          marker.pose.position.z = origin(2);
+          color = colors[2 * (seg + 2) + 1];
+          marker.color.r = color(0);
+          marker.color.g = color(1);
+          marker.color.b = color(2);
 
-        //cout << "Cyl. Color[" << -seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
+          //cout << "Cyl. Color[" << -seg << "] = [" << color(0) << ", " << color(1) << ", " << color(2) << "]" << endl;
 
-        marker.points.clear();
-        for(int i = 0 ; i < cylinders_resolution ; i++){
-          geometry_msgs::Point pt1, pt2;
-          pt1.x = cylinder_pts[i](0);
-          pt1.y = cylinder_pts[i](1) * R;
-          pt1.z = cylinder_pts[i](2) * R;
-          pt2.x = cylinder_pts[i + 1](0);
-          pt2.y = cylinder_pts[i + 1](1) * R;
-          pt2.z = cylinder_pts[i + 1](2) * R;
+          marker.points.clear();
+          for(int i = 0 ; i < cylinders_resolution ; i++){
+            geometry_msgs::Point pt1, pt2;
+            pt1.x = cylinder_pts[i](0);
+            pt1.y = cylinder_pts[i](1) * R;
+            pt1.z = cylinder_pts[i](2) * R;
+            pt2.x = cylinder_pts[i + 1](0);
+            pt2.y = cylinder_pts[i + 1](1) * R;
+            pt2.z = cylinder_pts[i + 1](2) * R;
 
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
 
-          pt2.x += params.segment_len;
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            pt2.x += params.segment_len;
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
 
-          marker.points.push_back(pt1);
-          pt1.x += params.segment_len;
-          marker.points.push_back(pt1);
+            marker.points.push_back(pt1);
+            pt1.x += params.segment_len;
+            marker.points.push_back(pt1);
 
-          marker.points.push_back(pt1);
-          marker.points.push_back(pt2);
+            marker.points.push_back(pt1);
+            marker.points.push_back(pt2);
+          }
+
+          markers.markers.push_back(marker);
+          goon = true;
         }
-
-        markers.markers.push_back(marker);
-        goon = true;
       }
     }
     cylinders_publ.publish(markers);
+  }
+
+  if(plot_sensor_frame){
+    marker.points.clear();
+    marker.colors.clear();
+    marker.points.reserve(6);
+    marker.colors.reserve(6);
+    marker.type = visualization_msgs::Marker::LINE_LIST;
+    marker.header.seq++;
+    marker.id++;
+    marker.scale.x = 3 * triads_scale;
+    marker.scale.y = 3 * triads_scale;
+    marker.scale.z = 3 * triads_scale;
+
+    marker.pose.position.x = 0;
+    marker.pose.position.y = 0;
+    marker.pose.position.z = 0;
+    marker.pose.orientation.w = 1;
+    marker.pose.orientation.x = 0;
+    marker.pose.orientation.y = 0;
+    marker.pose.orientation.z = 0;
+
+    std_msgs::ColorRGBA red, green, blue;
+    red.r = 1; 
+    green.g = 1;
+    blue.b = 1;
+    red.a = green.a = blue.a = 1;
+
+    Eigen::Vector3d origin(0, 0, 0);
+    Eigen::Matrix3d triad = Eigen::Matrix3d::Identity();
+    geometry_msgs::Point pt1, pt2;
+
+    pt1.x = origin(0); pt1.y = origin(1); pt1.z = origin(2);
+    pt2.x = pt1.x + triad(0, 0); pt2.y = pt1.y + triad(1, 0); pt2.z = pt1.z + triad(2, 0);
+    marker.points.push_back(pt1); marker.points.push_back(pt2);
+    marker.colors.push_back(red);
+    marker.colors.push_back(red);
+    pt2.x = pt1.x + triad(0, 1); pt2.y = pt1.y + triad(1, 1); pt2.z = pt1.z + triad(2, 1);
+    marker.points.push_back(pt1); marker.points.push_back(pt2);
+    marker.colors.push_back(green);
+    marker.colors.push_back(green);
+    pt2.x = pt1.x + triad(0, 2); pt2.y = pt1.y + triad(1, 2); pt2.z = pt1.z + triad(2, 2);
+    marker.points.push_back(pt1); marker.points.push_back(pt2);
+    marker.colors.push_back(blue);
+    marker.colors.push_back(blue);
+
+    sensor_frame_publ.publish(marker);
   }
 
   // Iterate through segments
@@ -584,8 +703,66 @@ void publish_rviz_msgs(){
   //
 
   //
-  //rviz_publ.publish(markers);
   //
   seq = marker.header.seq;
+  marker_id = marker.id;
 }
+
+void publish_odom_msg(){
+
+  static int seq = 0;
+
+  Eigen::Matrix3d imu_dcm = utils::trans::imu2dcm(imu_msg, true);
+  Eigen::Vector3d imu_rpy = utils::trans::dcm2rpy(imu_dcm);
+ 
+  if(imu_rpy(0) == 0 || imu_rpy(1) == 0){
+    ROS_WARN("No measurement available! IMU roll and/or pitch are '0'.");
+    return;
+  }
+
+
+  std::map<int, Eigen::Vector3d> segment_origins;
+  std::map<int, Eigen::Matrix3d> segment_triads;
+  std::map<int, Eigen::VectorXd> segment_contours;
+  pc2surfs.get_segments(segment_origins, segment_triads, segment_contours);
+   
+  if(segment_origins.find(0) == segment_origins.end() ||
+     segment_triads.find(0)  == segment_triads.end()){
+    ROS_WARN("No measurement available! No segment at '0'.");
+    return;
+  }
+
+  Eigen::Matrix4d se3;
+  se3.setIdentity();
+  se3.topLeftCorner<3, 3>() = segment_triads[0];
+  se3.topRightCorner<3, 1>() = segment_origins[0];
+
+  se3 = se3.inverse();
+  
+  se3(0, 3) = 0;
+
+  Eigen::Vector3d rpy = utils::trans::dcm2rpy(se3.topLeftCorner<3, 3>());
+  rpy(0) = imu_rpy(0);
+  rpy(1) = imu_rpy(1);
+  se3.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy);
+
+  odom_msg = utils::trans::se32odom(se3);
+  
+  odom_msg.header.stamp = ros::Time::now();
+  odom_msg.header.seq = seq++;
+  odom_msg.header.frame_id = "world";
+
+  odom_publ.publish(odom_msg);
+
+  static tf::TransformBroadcaster tf_br;
+  tf::Transform tf_velodyne_world;
+  tf_velodyne_world.setOrigin(tf::Vector3(se3(0, 3), se3(1, 3), se3(2, 3)));
+  tf::Quaternion q;
+  q.setRPY(rpy(0), rpy(1), rpy(2));
+  tf_velodyne_world.setRotation(q);
+  tf_br.sendTransform(tf::StampedTransform(tf_velodyne_world, ros::Time::now(), "world", "velodyne"));
+
+  imu_available = false;
+}
+
 

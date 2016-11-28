@@ -6,6 +6,7 @@ visualization:
   plot_planes: true
   plot_segments: true
   plot_cylinders: true
+  enable_pcl_viewer: false
   pc_orig_color:
     r: 1.0
     g: 1.0
@@ -28,7 +29,7 @@ visualization:
   normals_norm: 0.45
   normals_skip: 1
   triads_scale: 0.05
-  triads_norm: 1.0
+  triads_norm: 0.75
   planes_scale: 6.50
 
 

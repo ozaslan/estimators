@@ -50,6 +50,8 @@ struct PC2SurfacesParams{
     double var_r;
     double var_azimutal;
     double var_elevation;
+    double max_segment_dist;
+    double max_segment_rot;
 };
 
 class PC2Surfaces{
@@ -59,6 +61,7 @@ class PC2Surfaces{
     // ------------ BOOKKEEPING --------------------------------------------------- //
     // Segment ID of each point in '_pc_sphere'
     vector<int> _segment_ids;
+    vector<int> _valid_segs;
     // Outlier flags for points in '_pc_sphere'
     vector<bool> _outliers;
     // Mapping between segments and their corresponding 
@@ -169,9 +172,15 @@ class PC2Surfaces{
         map<int, Eigen::Vector3d> &segment_origins, 
         map<int, Eigen::Matrix3d> &segment_triads, 
         map<int, Eigen::VectorXd> &segment_contours){
-      segment_origins  = _segment_origin_map;
-      segment_triads   = _segment_triad_map;
-      segment_contours = _segment_contour_map;
+      segment_origins.clear();
+      segment_triads.clear();
+      segment_contours.clear();
+      for(int i = 0 ; i < (int)_valid_segs.size() ; i++){
+        int seg = _valid_segs[i];
+        segment_origins[seg]  = _segment_origin_map[seg];
+        segment_triads[seg]   = _segment_triad_map[seg];
+        segment_contours[seg] = _segment_contour_map[seg];
+      }
       return segment_triads.size();
     }
 

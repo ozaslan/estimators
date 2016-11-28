@@ -11,8 +11,9 @@
   <arg name="bagfile_path05" value="$(env ROS_DATASET_PATH)/inspot/towne03.bag"/>
   <arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot/towne04.bag"/>
   <arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot/towne05.bag"/>
+  <arg name="bagfile_path08" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-23-49.bag"/>
 
-  <arg name="bagfile_path" value="$(arg bagfile_path00)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path08)"/>
   <arg name="debug_mode"   value="TRUE"/>
 
   <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.0 --start=0 --duration=999 --quiet">
@@ -23,7 +24,7 @@
     <remap from="/quadruple/top_right/image_raw/compressed"    to="/cam/top_right/compressed"/>
   </node>
 
-  <node pkg="rvizZZZ" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_pc_to_surfaces.rviz"/>
+  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_pc_to_surfaces.rviz"/>
 
   <node pkg="tunnel_estimator" name="test_pc_to_surfaces" type="test_pc_to_surfaces" output="screen">
     <rosparam file="$(find tunnel_estimator)/config/pc_to_surfaces_params.yaml"/>
