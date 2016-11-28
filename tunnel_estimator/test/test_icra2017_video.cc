@@ -227,13 +227,14 @@ void publish_rviz_msgs(){
   marker.color.b = 1.0;
   marker.color.a = 1.0;
 
-
+  /*
   marker.action = visualization_msgs::Marker::DELETE;
   for(int i = 0 ; i <= marker_id * 100 ; i++){
     marker.header.seq++;
     marker.id = i;
     rviz_publ.publish(marker);
   }
+  */
   marker.id = 0;
   marker.header.stamp = ros::Time::now();
   marker.action = visualization_msgs::Marker::ADD;
@@ -253,7 +254,7 @@ void publish_rviz_msgs(){
     pc_orig->header.seq = seq++;
     pc_orig->height = 1;
     pc_orig->width = pc_orig->points.size();
-    pc_orig->header.stamp = ros::Time::now().toNSec();
+    pc_orig->header.stamp = ros::Time::now().toSec();
     pc_orig_publ.publish(*pc_orig);
   }
   // Publish _pc_sphere 
@@ -263,7 +264,7 @@ void publish_rviz_msgs(){
       pc_sphere->header.seq = seq++;
       pc_sphere->height = 1;
       pc_sphere->width = pc_sphere->points.size();
-      pc_sphere->header.stamp = ros::Time::now().toNSec();
+      pc_sphere->header.stamp = ros::Time::now().toSec();
       pc_sphere_publ.publish(*pc_sphere);
     }
   }
@@ -715,7 +716,7 @@ void publish_odom_msg(){
   Eigen::Matrix3d imu_dcm = utils::trans::imu2dcm(imu_msg, true);
   Eigen::Vector3d imu_rpy = utils::trans::dcm2rpy(imu_dcm);
  
-  if(imu_rpy(0) == 0 || imu_rpy(1) == 0){
+  if(imu_available == false){
     ROS_WARN("No measurement available! IMU roll and/or pitch are '0'.");
     return;
   }
@@ -737,8 +738,16 @@ void publish_odom_msg(){
   se3.topLeftCorner<3, 3>() = segment_triads[0];
   se3.topRightCorner<3, 1>() = segment_origins[0];
 
-  se3 = se3.inverse();
+  if(!(se3.array() == se3.array()).all()){
+    ROS_WARN("No measurement available! NaN's detected.");
+    return;
+  }
+
+  //cout << "se3 = " << se3 << endl;
   
+  se3 = se3.inverse();
+ 
+
   se3(0, 3) = 0;
 
   Eigen::Vector3d rpy = utils::trans::dcm2rpy(se3.topLeftCorner<3, 3>());
@@ -746,7 +755,10 @@ void publish_odom_msg(){
   rpy(1) = imu_rpy(1);
   se3.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy);
 
-  odom_msg = utils::trans::se32odom(se3);
+  Eigen::Matrix6d cov = Eigen::Matrix6d::Identity();
+  cov.topLeftCorner<3, 3>() *= 1e-6;
+  cov.bottomRightCorner<3, 3>() *= 1e-6;
+  odom_msg = utils::trans::se32odom(se3, false, cov);
   
   odom_msg.header.stamp = ros::Time::now();
   odom_msg.header.seq = seq++;

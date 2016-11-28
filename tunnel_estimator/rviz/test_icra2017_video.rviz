@@ -6,9 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /PC Orig1
+        - /Grid1
         - /Puck Frame1/Namespaces1
-        - /Meas. Model1
       Splitter Ratio: 0.5
     Tree Height: 567
   - Class: rviz/Selection
@@ -40,7 +39,7 @@ Visualization Manager:
       Enabled: true
       Line Style:
         Line Width: 0.03
-        Value: Billboards
+        Value: Lines
       Name: Grid
       Normal Cell Count: 0
       Offset:
@@ -120,7 +119,7 @@ Visualization Manager:
       Class: rviz/PointCloud2
       Color: 0; 255; 0
       Color Transformer: FlatColor
-      Decay Time: 0
+      Decay Time: 0.1
       Enabled: false
       Invert Rainbow: false
       Max Color: 255; 0; 0
@@ -130,7 +129,7 @@ Visualization Manager:
       Name: PC Sphere
       Position Transformer: XYZ
       Queue Size: 10
-      Selectable: false
+      Selectable: true
       Size (Pixels): 3
       Size (m): 0.13
       Style: Boxes
@@ -139,13 +138,13 @@ Visualization Manager:
       Use rainbow: true
       Value: false
     - Class: rviz/Marker
-      Enabled: false
+      Enabled: true
       Marker Topic: /test_icra2017_video/normals
       Name: Normals
       Namespaces:
-        {}
+        velodyne: true
       Queue Size: 100
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: false
       Marker Topic: /test_icra2017_video/planes
@@ -207,16 +206,82 @@ Visualization Manager:
         {}
       Queue Size: 100
       Value: false
-    - Angle Tolerance: 0
-      Class: rviz/Odometry
-      Color: 255; 25; 0
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /control_odom_visualization/vel
+          Name: Velocity
+          Namespaces:
+            vel: true
+          Queue Size: 100
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 25; 255; 0
+          Enabled: true
+          Line Style: Lines
+          Line Width: 0.03
+          Name: Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Topic: /control_odom_visualization/path
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /control_odom_visualization/mesh
+          Name: Robot
+          Namespaces:
+            odom_visualization: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /control_odom_visualization/cov
+          Name: Cov.
+          Namespaces:
+            cov: true
+          Queue Size: 100
+          Value: true
       Enabled: true
-      Keep: 1
-      Length: 1
+      Name: Control Odom.
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /meas_odom_visualization/cov
+          Name: Cov.
+          Namespaces:
+            cov: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /meas_odom_visualization/mesh
+          Name: Robot
+          Namespaces:
+            odom_visualization: true
+          Queue Size: 100
+          Value: true
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz/Path
+          Color: 225; 219; 255
+          Enabled: true
+          Line Style: Lines
+          Line Width: 0.03
+          Name: Path
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Topic: /meas_odom_visualization/path
+          Value: true
+      Enabled: true
       Name: Meas. Model
-      Position Tolerance: 0
-      Topic: /test_icra2017_video/odom
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 247; 247; 247
@@ -241,22 +306,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 24.0537
+      Distance: 14.4078
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.105506
-        Y: 0.0104197
-        Z: -1.34887
+        X: -0.32288
+        Y: -0.133785
+        Z: -1.92425
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.0498013
+      Pitch: 0.16
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.52727
+      Yaw: 4.66041
     Saved: ~
 Window Geometry:
   Displays:

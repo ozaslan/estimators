@@ -25,7 +25,7 @@
   <arg name="bagfile_path17" value="/media/ozaslan/research_backup/inspot/second_stage/inspot_2016-10-27-15-08-30.bag"/> 
 
 
-  <arg name="bagfile_path" value="$(arg bagfile_path11)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path02)"/>
   <arg name="debug_mode"   value="TRUE"/>
 
   <arg name="use_gdb" value="FALSE" />
@@ -37,7 +37,7 @@
   </group>
 
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=1.00 --start=0 --duration=555 ">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.999 --start=.78 --duration=555 --clock">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
@@ -56,6 +56,7 @@
     <remap from="~/velodyne_points" to="/velodyne_points"/>
     <remap from="~/imu" to="/mavros/imu/data"/>
     <remap from="~/cam" to="/cam/top_left/compressed"/>
+    <remap from="~/odom" to="/meas_odom"/>
 
     <param name="top_left_cam_calib_file"		  value="$(find calib_data)/camera/inspot_top_left_cam.yaml"/>
 		<param name="top_right_cam_calib_file"		value="$(find calib_data)/camera/inspot_top_right_cam.yaml"/>
@@ -63,4 +64,32 @@
 		<param name="bottom_left_cam_calib_file"	value="$(find calib_data)/camera/inspot_bottom_left_cam.yaml"/>
 
   </node>
+
+  <node pkg ="quadrotor_ukf_lite" 
+        name="quadrotor_ukf" 
+        type="quadrotor_ukf" 
+        output="screen">
+    <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
+    <remap from="~imu" to="/mavros/imu/data_raw"/>
+    <remap from="~odom_slam" to="/meas_odom"/>
+  </node>    
+
+  <node name="meas_odom_visualization"
+        pkg ="odom_visualization"
+        type="odom_visualization_node"
+        output="screen" >
+                             
+        <remap from="~odom" to="/meas_odom"/>
+        <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+   </node>
+
+   <node name="control_odom_visualization"
+        pkg ="odom_visualization"
+        type="odom_visualization_node"
+        output="screen" >
+                             
+        <remap from="~odom" to="/control_odom"/>
+        <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+      </node>
+     
 </launch>
