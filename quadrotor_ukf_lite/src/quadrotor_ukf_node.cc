@@ -18,7 +18,7 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 {
 	//ROS_INFO("Quadrotor_UKF - In imu_callback");
 	// Assemble control input, and calibration
-	static int calLimit = 100;
+	static int calLimit = 30;
 	static int calCnt   = 0;
 	static colvec ag = zeros<colvec>(3);
 	colvec u(6);
@@ -32,9 +32,11 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	{
 		calCnt++;
 		ag += u.rows(0,2);
+    //ROS_INFO("Calibration ------------------------------------------");
 	}
 	else if (calCnt == calLimit) // Save gravity vector
 	{
+    //ROS_INFO("Calibration Limit ********************************************");
 		calCnt++;
 		ag /= calLimit;
 		double g = norm(ag,2);
@@ -42,6 +44,7 @@ void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
 	}
 	else if (quadrotorUKF.ProcessUpdate(u, msg->header.stamp))  // Process Update
 	{
+    //ROS_INFO("Process Update #############################################");
 		nav_msgs::Odometry odomUKF;
 		odomUKF.header.stamp = quadrotorUKF.GetStateTime();
 		odomUKF.header.frame_id = frame_id;
@@ -122,7 +125,6 @@ void slam_callback(const nav_msgs::Odometry::ConstPtr& msg)
 	}
 	else
 	{
-		//printf("SetInitPose\n");
 		quadrotorUKF.SetInitPose(z, msg->header.stamp);
 	}
 	//ROS_INFO("Exit slam_callback");
@@ -184,7 +186,7 @@ int main(int argc, char** argv)
 	double stdW[3]       = {0,0,0};
 	double stdAccBias[3] = {0,0,0};
 	double stdAttBias[2] = {0,0};
-	n.param("frame_id", frame_id, string("/map"));
+	n.param("frame_id", frame_id, string("/world"));
 	n.param("alpha", alpha, 0.1);
 	n.param("beta" , beta , 2.0);
 	n.param("kappa", kappa, 0.0);

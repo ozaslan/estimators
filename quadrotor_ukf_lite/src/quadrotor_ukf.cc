@@ -64,6 +64,7 @@ void QuadrotorUKF::SetInitPose(colvec p, ros::Time time)
   colvec x = zeros<colvec>(stateCnt);
   x.rows(0,2)  = p.rows(0,2);
   x.rows(6,8)  = p.rows(3,5);
+  //x.print("xHist.push_front01 = ");
   xHist.push_front(x);
   uHist.push_front(zeros<colvec>(6));
   xTimeHist.push_front(time);
@@ -82,6 +83,9 @@ bool QuadrotorUKF::ProcessUpdate(colvec u, ros::Time time)
   //printf("dt ProcessModel = %lf\n", dt);
   colvec x = ProcessModel(xHist.front(), u, zeros<colvec>(procNoiseCnt), dt);
   //x.print("x = ProcessModel = ");
+  x(0) = 0; //###
+  x(3) = 0; //###
+  //x.print("xHist.push_front02 = ");
   xHist.push_front(x);
   uHist.push_front(u);
   xTimeHist.push_front(time);
@@ -102,6 +106,8 @@ bool QuadrotorUKF::MeasurementUpdateSLAM(colvec z, mat RnSLAM, ros::Time time)
   //printf("HERE1\n");fflush(NULL);
   PropagateAprioriCovariance(time, kx, ku, kt);
   colvec x = *kx;
+  //z.print("z = ");
+  //x.print("x[0] = ");
   //printf("HERE2\n");fflush(NULL);
   // Get Measurement
   mat H = MeasurementModelSLAM();
@@ -110,16 +116,23 @@ bool QuadrotorUKF::MeasurementUpdateSLAM(colvec z, mat RnSLAM, ros::Time time)
   // Compute Kalman Gain
   mat S = H * P * trans(H) + RnSLAM;
   mat K = P * trans(H) * inv(S);
+  //P.print("P = ");
+  //H.print("H = ");
+  //inv(S).print("inv(S) = ");
+  //K.print("K = ");
   //printf("HERE4\n");
   // Innovation
   colvec inno = z - za;
   //printf("HERE5\n");
   // Handle angle jumps
   inno(3) = asin(sin(inno(3)));
+  //inno.print("inno = ");
   //printf("HERE6\n");
   // Posteriori Mean
   x += K * inno;
+  // x(0) = 0; //###
   *kx = x;
+  //x.print("x[1] = ");
   //printf("HERE7\n");
   //P.print("Before innovation P = ");
   // Posteriori Covariance
@@ -222,6 +235,7 @@ colvec QuadrotorUKF::ProcessModel(const colvec& x, const colvec& u, const colvec
   ag(0) = 0;
   ag(1) = 0;
   ag(2) = g;
+  //ag.print("ag = ");
   // Acceleration
   colvec a = u.rows(0,2) + v.rows(0,2);
   colvec ddx = R * (a - x.rows(9,11)) - ag;
@@ -316,7 +330,9 @@ void QuadrotorUKF::PropagateAprioriCovariance(const ros::Time time,
   colvec    cx = *kx;
   ros::Time ct = *kt;
   //printf("Go 2.1\n");fflush(NULL);
+  //printf("xHist.size() = %d\n", xHist.size());
   colvec    px = xHist.back();
+  //px.print("px1 = ");
   //printf("Go 2.2\n");fflush(NULL);
   ros::Time pt = xTimeHist.back();
   //printf("Go 2.3\n");fflush(NULL);
@@ -336,6 +352,7 @@ void QuadrotorUKF::PropagateAprioriCovariance(const ros::Time time,
   xTimeHist.erase(k3, xTimeHist.end());
   //printf("Go 5\n");fflush(NULL);
   // rot, gravity
+  //px.print("px2 = ");
   mat pR = ypr_to_R(px.rows(6,8));
   colvec ag(3);
   ag(0) = 0;
@@ -344,11 +361,16 @@ void QuadrotorUKF::PropagateAprioriCovariance(const ros::Time time,
   //printf("Go 6\n");fflush(NULL);
   // Linear Acceleration
   mat dv = cx.rows(3,5) - px.rows(3,5);
+
   colvec a = trans(pR) * (dv / dt + ag) + px.rows(9,11);
+  //trans(pR).print("trans(pR) = ");
+  //px.print("px = ");
+  //dv.print("dv = ");
   //printf("Go 7\n");fflush(NULL);
   // Angular Velocity
   mat dR = trans(pR) * ypr_to_R(cx.rows(6,8));
   colvec w = zeros<colvec>(3);
+  //printf("dt = %f\n", dt);
   w(0) = dR(2,1) / dt;
   w(1) = dR(0,2) / dt;
   w(2) = dR(1,0) / dt;
