@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_msgs/Float64.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_ros/transforms.h>
 #include <pcl/point_types.h>
@@ -13,7 +14,11 @@
 #include "utils.hh"
 #include "pc_to_surfaces.hh"
 
-#define DEBUG_MSGS_ON 1
+#include <iostream>
+#include <fstream>
+
+
+#define DEBUG_MSGS_ON 0
 #define DEBUG_MSG_TEXT (string(__func__) + " " + to_string(__LINE__))
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
@@ -24,6 +29,8 @@ utils::colors::Colors colors;
 ros::Publisher rviz_publ, 
   pc_orig_publ, 
   pc_sphere_publ, 
+  pc_outliers_publ, //###
+  pc_objects_publ, //###
   pc_sphere_normals_publ,
   normals_publ,
   triads_publ,
@@ -31,6 +38,7 @@ ros::Publisher rviz_publ,
   segments_publ,
   cylinders_publ,
   sensor_frame_publ,
+  object_dist_publ,
   odom_publ;
 ros::Subscriber velodyne_subs, imu_subs;
 sensor_msgs::PointCloud2 velodyne_msg;
@@ -46,6 +54,7 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg);
 void imu_callback(const sensor_msgs::Imu &msg);
 void publish_rviz_msgs();
 void publish_odom_msg();
+void publish_objects_msg();
 
 std::map<int, Eigen::Vector3d> segment_origins;
 std::map<int, Eigen::Matrix3d> segment_triads;
@@ -65,6 +74,8 @@ double cylinders_line_scale;
 int cylinders_resolution;
 bool plot_pc_orig;
 bool plot_pc_sphere;
+bool plot_pc_outliers;
+bool plot_pc_objects;
 bool plot_normals;
 bool plot_triads;
 bool plot_planes;
@@ -137,6 +148,8 @@ void process_inputs(const ros::NodeHandle &n)
   n.param("visualization/normals_skip", normals_skip, 10);
   n.param("visualization/plot_pc_orig", plot_pc_orig, true);
   n.param("visualization/plot_pc_sphere", plot_pc_sphere, true);
+  n.param("visualization/plot_pc_outliers", plot_pc_outliers, true);
+  n.param("visualization/plot_pc_objects", plot_pc_objects, true);
   n.param("visualization/plot_normals", plot_normals, true);
   n.param("visualization/plot_triads", plot_triads, true);
   n.param("visualization/plot_planes", plot_planes, true);
@@ -164,8 +177,8 @@ int setup_messaging_interface(ros::NodeHandle &n)
     ROS_INFO(" --- Listening  : ~velodyne_points");
   }
 
-  velodyne_subs	 = n.subscribe("velodyne_points", 10, velodyne_callback, ros::TransportHints().tcpNoDelay());
-  imu_subs	 = n.subscribe("imu", 10, imu_callback, ros::TransportHints().tcpNoDelay());
+  velodyne_subs	 = n.subscribe("velodyne_points", 1, velodyne_callback, ros::TransportHints().tcpNoDelay());
+  imu_subs	 = n.subscribe("imu", 1, imu_callback, ros::TransportHints().tcpNoDelay());
   rviz_publ      = n.advertise<visualization_msgs::Marker>("delete_markers", 10);
   cylinders_publ = n.advertise<visualization_msgs::MarkerArray>("cylinders", 10);
   normals_publ   = n.advertise<visualization_msgs::Marker>("normals", 10);
@@ -174,8 +187,11 @@ int setup_messaging_interface(ros::NodeHandle &n)
   planes_publ    = n.advertise<visualization_msgs::MarkerArray>("planes", 10);
   pc_orig_publ   = n.advertise<PointCloud> ("pc_orig", 1);
   pc_sphere_publ = n.advertise<PointCloud> ("pc_sphere", 1);
+  pc_outliers_publ = n.advertise<PointCloud> ("pc_outliers", 1); //###
+  pc_objects_publ = n.advertise<PointCloud> ("pc_objects", 1); //###
   segments_publ  = n.advertise<ColoredPointCloud> ("pc_segments", 1);
   odom_publ      = n.advertise<nav_msgs::Odometry> ("odom", 1);
+  object_dist_publ = n.advertise<std_msgs::Float64>("object_distance", 1);
   pc_sphere_normals_publ = n.advertise<PointCloud> ("pc_sphere_normals", 1);
 
   return 0;
@@ -196,9 +212,20 @@ void velodyne_callback(const sensor_msgs::PointCloud2 &msg)
     pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::fromROSMsg(msg, *pc);
 
+  double offset_th = -0.49; //radians
+  for(int i = 0 ; i < (int)pc->points.size() ; i++){
+    double x = pc->points[i].x;
+    double y = pc->points[i].y;
+
+    pc->points[i].x = cos(offset_th) * x - sin(offset_th) * y;
+    pc->points[i].y = sin(offset_th) * x + cos(offset_th) * y;
+
+  }
+
   pc2surfs.push_pc(pc);
   publish_rviz_msgs();
   publish_odom_msg();
+  publish_objects_msg();
   if(enable_pcl_viewer)
     pc2surfs.visualize_fit();
 
@@ -242,7 +269,7 @@ void publish_rviz_msgs(){
   // ---------------------------------------------------------- //
   vector<int>  ids;
   vector<bool> outliers;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr pc_orig, pc_sphere;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pc_orig, pc_sphere, pc_outliers, pc_objects;
   pcl::PointCloud<pcl::Normal>::Ptr pc_sphere_normals;
   // ---------------------------------------------------------- //
   //
@@ -254,7 +281,8 @@ void publish_rviz_msgs(){
     pc_orig->header.seq = seq++;
     pc_orig->height = 1;
     pc_orig->width = pc_orig->points.size();
-    pc_orig->header.stamp = ros::Time::now().toSec();
+    //pc_orig->header.stamp = ros::Time::now().toSec();
+    pcl_conversions::toPCL(ros::Time::now(), pc_orig->header.stamp);
     pc_orig_publ.publish(*pc_orig);
   }
   // Publish _pc_sphere 
@@ -264,10 +292,35 @@ void publish_rviz_msgs(){
       pc_sphere->header.seq = seq++;
       pc_sphere->height = 1;
       pc_sphere->width = pc_sphere->points.size();
-      pc_sphere->header.stamp = ros::Time::now().toSec();
+      //pc_sphere->header.stamp = ros::Time::now().toSec();
+      pcl_conversions::toPCL(ros::Time::now(), pc_sphere->header.stamp);
       pc_sphere_publ.publish(*pc_sphere);
     }
   }
+  // ###
+  if((plot_pc_outliers) && pc2surfs.get_pc_outliers(pc_outliers)){
+    if(plot_pc_outliers){
+      pc_outliers->header.frame_id = "velodyne";
+      pc_outliers->header.seq = seq++;
+      pc_outliers->height = 1;
+      pc_outliers->width = pc_outliers->points.size();
+      pcl_conversions::toPCL(ros::Time::now(), pc_outliers->header.stamp);
+      pc_outliers_publ.publish(*pc_outliers);
+    }
+  }
+
+  if((plot_pc_objects) && pc2surfs.get_pc_objects(pc_objects)){
+    if(plot_pc_objects){
+      pc_objects->header.frame_id = "velodyne";
+      pc_objects->header.seq = seq++;
+      pc_objects->height = 1;
+      pc_objects->width = pc_objects->points.size();
+      pcl_conversions::toPCL(ros::Time::now(), pc_objects->header.stamp);
+      pc_objects_publ.publish(*pc_objects);
+    }
+  }
+
+  // ###---
   // Plot normals
   if(plot_normals && pc2surfs.get_normals(pc_sphere_normals)){
     int num_pts = pc_sphere_normals->points.size();
@@ -501,7 +554,8 @@ void publish_rviz_msgs(){
     colored_segments.header.frame_id = "velodyne";
     colored_segments.height = 1;
     colored_segments.width = colored_segments.points.size();
-    colored_segments.header.stamp = ros::Time::now().toSec();
+    //colored_segments.header.stamp = ros::Time::now().toSec();
+    pcl_conversions::toPCL(ros::Time::now(), colored_segments.header.stamp);
 
     segments_publ.publish(colored_segments);
   }
@@ -709,6 +763,33 @@ void publish_rviz_msgs(){
   marker_id = marker.id;
 }
 
+void publish_objects_msg(){
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pc_objects;
+  pc2surfs.get_pc_objects(pc_objects);
+
+  static std_msgs::Float64 msg;
+  msg.data = 999;
+  
+  Eigen::Vector3d robot_pos;
+  robot_pos(0) = odom_msg.pose.pose.position.x;
+  robot_pos(1) = odom_msg.pose.pose.position.y;
+  robot_pos(2) = odom_msg.pose.pose.position.z;
+
+  for(int i = 0 ; i < (int)pc_objects->points.size() ; i++){
+    Eigen::Vector3d pt;
+    pt(0) = pc_objects->points[i].x;
+    pt(1) = pc_objects->points[i].y;
+    pt(2) = pc_objects->points[i].z;
+    double pt_dist =  (robot_pos - pt).norm();
+    if(pt_dist < msg.data)
+      msg.data = pt_dist;
+  }
+
+  object_dist_publ.publish(msg);
+  
+}
+
 void publish_odom_msg(){
 
   static int seq = 0;
@@ -746,18 +827,44 @@ void publish_odom_msg(){
   //cout << "se3 = " << se3 << endl;
   
   se3 = se3.inverse();
- 
 
   se3(0, 3) = 0;
 
   Eigen::Vector3d rpy = utils::trans::dcm2rpy(se3.topLeftCorner<3, 3>());
-  rpy(0) = imu_rpy(0);
-  rpy(1) = imu_rpy(1);
+  // edit begin ------------------ //
+  //rpy(0) = imu_rpy(0);
+  rpy(1) = imu_rpy(1); // copy pitch from the IMU. Keep yaw as estimated by Meas. Model.
   se3.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy);
+ 
+  rpy(0) = imu_rpy(0);
+  rpy(1) = 0;
+  rpy(2) = 0; // Multiple by roll
+  Eigen::Matrix4d rp_se3;
+  rp_se3.setIdentity();
+  rp_se3.topLeftCorner<3, 3>() = utils::trans::rpy2dcm(rpy);
+  se3 = rp_se3 * se3;
+  
+  rpy = utils::trans::dcm2rpy(se3.topLeftCorner<3, 3>());
+  // edit end -------------------- //
 
   Eigen::Matrix6d cov = Eigen::Matrix6d::Identity();
   cov.topLeftCorner<3, 3>() *= 1e-6;
   cov.bottomRightCorner<3, 3>() *= 1e-6;
+
+  // --------------------------------------------------------- 
+  std::map<int, Eigen::Matrix3d> axis_uncertainties;
+  std::map<int, Eigen::MatrixXd> contour_uncertainties;
+
+  pc2surfs.get_uncertainties(axis_uncertainties, contour_uncertainties);
+  
+  Eigen::MatrixXd odom_cov = contour_uncertainties[0];
+
+  Eigen::MatrixXd rot_mat = se3.topLeftCorner<3, 3>().bottomRightCorner<2, 2>();
+  odom_cov = rot_mat * odom_cov.topLeftCorner<2, 2>() * rot_mat.transpose();
+
+  cov.topLeftCorner<3, 3>().bottomRightCorner<2, 2>() = odom_cov;
+  // --------------------------------------------------------- 
+
   odom_msg = utils::trans::se32odom(se3, false, cov);
   
   odom_msg.header.stamp = ros::Time::now();
@@ -766,6 +873,22 @@ void publish_odom_msg(){
 
   odom_publ.publish(odom_msg);
 
+  
+  //ofstream myfile;
+  //myfile.open ("example.txt");
+  //myfile << "Writing this to a file.\n";
+  //myfile.close();
+ 
+  /* 
+  static ofstream odom_stream;
+  if(!odom_stream.is_open())
+    odom_stream.open("odom.txt");
+  odom_stream << (long long int)odom_msg.header.stamp.toNSec() << " " 
+              << odom_msg.pose.pose.position.x << " "
+              << odom_msg.pose.pose.position.y << " "
+              << odom_msg.pose.pose.position.z << endl;
+  */
+  
   static tf::TransformBroadcaster tf_br;
   tf::Transform tf_velodyne_world;
   tf_velodyne_world.setOrigin(tf::Vector3(se3(0, 3), se3(1, 3), se3(2, 3)));

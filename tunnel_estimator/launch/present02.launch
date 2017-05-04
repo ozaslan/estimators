@@ -34,14 +34,9 @@
   
   <arg name="bagfile_path24" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase3/inspot_2017-02-09-13-50-52.bag"/>
   <arg name="bagfile_path25" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase3/inspot_2017-02-09-13-31-38.bag"/>
+  <arg name="bagfile_path26" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-12-55-18.bag"/>
 
-  <arg name="bagfile_path26" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-12-33-01.bag"/> <!-- 30.MTS -->
-  <arg name="bagfile_path27" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-13-08-50.bag"/> <!-- 35.MTS -->
-  
-  <arg name="bagfile_path28" value="/media/ozaslan/research_backup/inspot/MayTrip/phase1/inspot_2017-05-03-15-53-26.bag"/> 
-  <arg name="bagfile_path29" value="/media/ozaslan/research_backup/inspot/MayTrip/phase2/inspot_2017-05-03-16-14-27.bag"/> 
-
-  <arg name="bagfile_path" value="$(arg bagfile_path29)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path25)"/>
   <arg name="debug_mode"   value="FALSE"/>
 
   <arg name="use_gdb" value="FALSE" />
@@ -53,7 +48,7 @@
   </group>
 
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.999 --start=70 --duration=1000 --clock">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="  $(arg bagfile_path) --rate=.3999 --start=100 --duration=300 --clock">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
@@ -107,5 +102,8 @@
         <remap from="~odom" to="/control_odom"/>
         <rosparam file="$(find odom_visualization)/config/config02.yaml" />
       </node>
-     
+
+      <node name="rosbag" pkg="rosbag" type="record" output="screen" 
+        args="record -o /home/ozaslan/Dropbox/RAL2017_inspection/results/dataset02.bag /Inspot/odom /meas_odom" />
+
 </launch>

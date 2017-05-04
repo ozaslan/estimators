@@ -12,6 +12,8 @@ namespace utils{
 PC2Surfaces::PC2Surfaces(){
   _pc_orig = NULL;
   _pc_sphere = NULL;
+  _pc_outliers = NULL;
+  _pc_objects = NULL;
   _pc_sphere_normals = NULL;
   _viewer == NULL;
 }
@@ -42,6 +44,12 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 
   if(_pc_sphere == NULL)
     _pc_sphere = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+  if(_pc_outliers == NULL)
+    _pc_outliers = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+  if(_pc_objects == NULL)
+    _pc_objects = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
   _filter_segment(_params.unclassified_id);
   _fit_normals();
@@ -100,9 +108,89 @@ int PC2Surfaces::push_pc(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
         else
           break;
       } else
-          break;
+        break;
     } else
       break;
+  }
+
+  // edit start ###
+  _pc_outliers->points.clear();
+  _pc_outliers->points.reserve(_outliers.size());
+  for(int i = 0 ; i < (int)_outliers.size() ; i++){
+    if(_outliers[i] == true)
+      _pc_outliers->points.push_back(_pc_sphere->points[i]);
+  }
+
+  double outer_r_thres = 11.1;
+  double inner_r_thres = 0.8;
+  double normal_thres = -cos(M_PI / 4);
+
+  for(int s = 0 ; s < (int)_valid_segs.size() ; s++){
+    int seg = _valid_segs[s];
+    bool is_last_seg = true;
+    if(seg < 0)
+      continue;
+    else {
+      for(int ss = 0 ; ss <= (int)_valid_segs.size() ; ss++)
+        if(seg < _valid_segs[ss]){
+          is_last_seg = false;
+          break;
+        }
+    } 
+
+    Eigen::Matrix3d triad  = _segment_triad_map[seg];
+    Eigen::Vector3d origin = _segment_origin_map[seg];
+
+    double seg_radius = _segment_contour_map[seg](2);
+
+    for(int i = 0 ; i < (int)_pc_sphere->points.size() ; i++){
+      if(_outliers[i] == true  && _segment_ids[i] == seg){
+        pcl::PointXYZ pt = (*_pc_sphere)[i];
+        Eigen::Vector3d proj(pt.x, pt.y, pt.z);
+        proj = triad.transpose() * (proj - origin);
+        double y = proj(1);
+        double z = proj(2);
+
+        pcl::Normal &normal_pcl = _pc_sphere_normals->points[i]; 
+        double dprod = normal_pcl.normal_x * triad(0, 0) + 
+                       normal_pcl.normal_y * triad(1, 0) + 
+                       normal_pcl.normal_z * triad(2, 0);
+
+        double r = sqrt(y * y + z * z) / seg_radius;
+        if( (r <= inner_r_thres || r >= outer_r_thres) && dprod <= normal_thres ){
+          _segment_ids[i] = _params.object_id;
+        }
+      }
+    }
+
+    if(is_last_seg == true){ 
+      for(int i = 0 ; i < (int)_pc_sphere->points.size() ; i++){
+        pcl::PointXYZ pt = (*_pc_sphere)[i];
+        Eigen::Vector3d proj(pt.x, pt.y, pt.z);
+        proj = triad.transpose() * (proj - origin);
+        double x = proj(0);
+        double y = proj(1);
+        double z = proj(2);
+        double r = sqrt(y * y + z * z) / seg_radius;
+
+        pcl::Normal &normal_pcl = _pc_sphere_normals->points[i]; 
+        double dprod = normal_pcl.normal_x * triad(0, 0) + 
+                       normal_pcl.normal_y * triad(1, 0) + 
+                       normal_pcl.normal_z * triad(2, 0);
+
+
+        if(x >= _params.segment_len / 2 && (r <= inner_r_thres || r >= outer_r_thres) && dprod <= normal_thres){
+          _segment_ids[i] = _params.object_id;
+        }
+      }
+    }
+  }
+
+  _pc_objects->points.clear();
+  _pc_objects->points.reserve(_outliers.size());
+  for(int i = 0 ; i < (int)_segment_ids.size() ; i++){
+    if(_segment_ids[i] == _params.object_id)
+      _pc_objects->points.push_back(_pc_sphere->points[i]);
   }
 
   //TOC(__func__);
@@ -332,8 +420,8 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
   int num_pts = _pc_sphere->points.size();
 
   Eigen::MatrixXd &A = _segment_contour_equ[seg].first;
-    if(A.rows() == 0)
-      return -1;
+  if(A.rows() == 0)
+    return -1;
   Eigen::VectorXd &b = _segment_contour_equ[seg].second;
 
   JacobiSVD<Eigen::MatrixXd> svd(A, Eigen::ComputeThinU | Eigen::ComputeThinV);
@@ -341,7 +429,7 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
   const Eigen::MatrixXd &V = svd.matrixV();
   Eigen::Matrix3d D;
   D.setZero();
-    //cout << A << endl;
+  //cout << A << endl;
   D.diagonal() = svd.singularValues();
   Eigen::Matrix3d D_inv = D.inverse();
   Eigen::Matrix3d D_inv_sqr = D_inv * D_inv;
@@ -401,6 +489,7 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
       Eigen::MatrixXd pt_uncertainty = triad * _point_uncertainties[i] * triad.transpose();
       pt_uncertainty = pt_uncertainty.bottomRightCorner<2, 2>();
 
+      // https://hal.inria.fr/inria-00072686/document
       for(int dim = 0 ; dim <= 1 ; dim++){
 
         // Calculate dD
@@ -447,7 +536,8 @@ int PC2Surfaces::_estimate_uncertainties(int seg){
       j++;
     }
   }
-  //cout << "Contour Uncert[" << seg << "] = " << endl << _contour_uncertainties[seg] << endl;
+  //if(seg == 0)
+  //  cout << "Contour Uncert[" << seg << "] = " << endl << _contour_uncertainties[seg] << endl;
 }
 
 
@@ -799,6 +889,7 @@ PC2SurfacesParams::PC2SurfacesParams(){
   max_outer_iter = 5;
   outlier_id = -99999;
   unclassified_id = 99999;
+  object_id = 88888;
   term_perc_crit = 0.07;
   normal_dev_thres1 = 15; // degrees
   normal_dev_thres2 = 10; 

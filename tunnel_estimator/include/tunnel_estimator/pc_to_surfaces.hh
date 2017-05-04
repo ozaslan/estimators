@@ -36,6 +36,7 @@ struct PC2SurfacesParams{
     int max_outer_iter;
     int outlier_id;
     int unclassified_id;
+    int object_id;
     double term_perc_crit;
     double normal_dev_thres1; // degrees
     double normal_dev_thres2; 
@@ -97,6 +98,8 @@ class PC2Surfaces{
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_orig;
     // '_pc_orig' after filtered with voxel grid filter and radius filter.
     pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_sphere;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_outliers;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr _pc_objects;
     // Normals of the points in '_pc_sphere'.
     pcl::PointCloud<pcl::Normal>::Ptr _pc_sphere_normals;
     // '_pc_sphere' written in the corresponding segment frame.
@@ -203,6 +206,28 @@ class PC2Surfaces{
         return 0;
       }
     }
+
+    inline int get_pc_outliers(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
+      if(_pc_outliers){
+        pc = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>(*_pc_outliers));
+        return pc->points.size();
+      } else {
+        pc = NULL;
+        return 0;
+      }
+    }
+
+    inline int get_pc_objects(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
+      if(_pc_objects){
+        pc = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>(*_pc_objects));
+        return pc->points.size();
+      } else {
+        pc = NULL;
+        return 0;
+      }
+    }
+
+
 
     inline int get_normals(pcl::PointCloud<pcl::Normal>::Ptr &normals){
       if(_pc_sphere_normals){

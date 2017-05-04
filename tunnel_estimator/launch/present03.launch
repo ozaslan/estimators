@@ -34,14 +34,10 @@
   
   <arg name="bagfile_path24" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase3/inspot_2017-02-09-13-50-52.bag"/>
   <arg name="bagfile_path25" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase3/inspot_2017-02-09-13-31-38.bag"/>
+  <arg name="bagfile_path26" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-13-08-50.bag"/>
+  <arg name="bagfile_path27" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-12-33-01.bag"/>
 
-  <arg name="bagfile_path26" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-12-33-01.bag"/> <!-- 30.MTS -->
-  <arg name="bagfile_path27" value="/media/ozaslan/research_backup/inspot/February9_CHD/feb9phase2/inspot_2017-02-09-13-08-50.bag"/> <!-- 35.MTS -->
-  
-  <arg name="bagfile_path28" value="/media/ozaslan/research_backup/inspot/MayTrip/phase1/inspot_2017-05-03-15-53-26.bag"/> 
-  <arg name="bagfile_path29" value="/media/ozaslan/research_backup/inspot/MayTrip/phase2/inspot_2017-05-03-16-14-27.bag"/> 
-
-  <arg name="bagfile_path" value="$(arg bagfile_path29)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path26)"/>
   <arg name="debug_mode"   value="FALSE"/>
 
   <arg name="use_gdb" value="FALSE" />
@@ -53,7 +49,7 @@
   </group>
 
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.999 --start=70 --duration=1000 --clock">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="  $(arg bagfile_path) --rate=1.49 --start=0 --duration=555 --clock --loop">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>
@@ -63,8 +59,8 @@
 
   <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_icra2017_video.rviz"/>
 
+  <!--
   <node pkg="tunnel_estimator" name="test_icra2017_video" type="test_icra2017_video" output="screen">
-    <!-- launch-prefix="$(arg gdb_launch_prefix)" -->
     <rosparam file="$(find tunnel_estimator)/config/pc_to_surfaces_params.yaml"/>
     <rosparam file="$(find tunnel_estimator)/config/visualization_params.yaml"/>
     <param name="debug_mode" value="$(arg debug_mode)"/>
@@ -107,5 +103,41 @@
         <remap from="~odom" to="/control_odom"/>
         <rosparam file="$(find odom_visualization)/config/config02.yaml" />
       </node>
-     
+  -->
+      <!--
+      <node pkg="image_transport" type="republish" name="republish_tr"
+        args="compressed in:=/cam/top_right raw out:=/cam/top_right" output="screen" />
+
+      <node
+       pkg="image_view" type="image_view" name="viewer_tr" 
+       args="image:=/cam/top_right " output="screen">
+   </node>
+   
+   <node pkg="image_transport" type="republish" name="republish_tl"
+        args="compressed in:=/cam/top_left raw out:=/cam/top_left" output="screen" />
+
+      <node
+       pkg="image_view" type="image_view" name="viewer_tl" 
+       args="image:=/cam/top_left " output="screen">
+   </node>
+   
+   <node pkg="image_transport" type="republish" name="republish_br"
+        args="compressed in:=/cam/bottom_right raw out:=/cam/bottom_right" output="screen" />
+
+      <node
+       pkg="image_view" type="image_view" name="viewer_br" 
+       args="image:=/cam/bottom_right " output="screen">
+     </node>
+
+  <node pkg="image_transport" type="republish" name="republish_bl"
+        args="compressed in:=/cam/bottom_left raw out:=/cam/bottom_left" output="screen" />
+
+      <node
+       pkg="image_view" type="image_view" name="viewer_bl" 
+       args="image:=/cam/bottom_left " output="screen">
+   </node>
+   -->
+
+
+
 </launch>

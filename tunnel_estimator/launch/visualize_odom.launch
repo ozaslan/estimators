@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+
+-->
+<launch>
+  <node pkg="rviz" name="rviz" type="rviz" args="-d $(find tunnel_estimator)/rviz/test_icra2017_video.rviz"/>
+
+  <node name="meas_odom_visualization"
+        pkg ="odom_visualization"
+        type="odom_visualization_node"
+        output="screen" >
+                             
+        <remap from="~odom" to="/meas_odom"/>
+        <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+   </node>
+
+   <node name="control_odom_visualization"
+        pkg ="odom_visualization"
+        type="odom_visualization_node"
+        output="screen" >
+        <!--                             
+        <remap from="~odom" to="/control_odom"/>
+        -->
+        <remap from="~odom" to="/Inspot/odom"/>
+        <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+      </node>
+     
+</launch>
