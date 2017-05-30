@@ -95,7 +95,7 @@ public:
 	// 'get_fitness_score' functions can be used to get the results.
 	// In this implementation only y-z-yaw DOFs are updated. This
 	// function s returns the number of iterations.
-	int estimate_pose(const Eigen::Matrix4d &init_pose);
+	int estimate_pose(const Eigen::Matrix4d &init_pose, double heading);
 	// This function assumes that 'estimate_pose' function is called
 	// beforehand. When properly called, it returns the pose in 
 	// world frame. Otherwise last pose residing from the most 

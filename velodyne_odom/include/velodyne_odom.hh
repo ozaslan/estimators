@@ -17,13 +17,17 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 
+#include <ros/ros.h>
+
 #include <sensor_msgs/PointCloud2.h>
 
+/*
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/nonlinear/GaussNewtonOptimizer.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
+*/
 
 #include <utils.hh>
 
@@ -125,6 +129,10 @@ public:
 		int print();
 	};
 private:
+  double _kf_time;
+  double _temporal_kf_interval;
+  bool   _temporal_kf_mode;
+
 	std::string _methods_list;
 	// Map of the environment as built by all keyframe pointclouds
 	pcl::PointCloud<pcl::PointXYZ>::Ptr _map;
@@ -160,10 +168,12 @@ private:
   
 	VelodyneOdomParams _params;
 
+  /*
 	// GTSam mechanism (To be implemented later!)	
 	gtsam::NonlinearFactorGraph _gtsam_graph_with_prior;
 	gtsam::GaussNewtonParams _gtsam_params;
 	gtsam::noiseModel::Diagonal::shared_ptr _gtsam_prior_model;
+  */
 
 	// This keeps track of which keyframes are fine-aligned with respect to
 	// each other. Pose-graph as in _gtsam_graph_with_prior has the same
@@ -223,11 +233,23 @@ private:
 public:	
 	VelodyneOdom();
 	VelodyneOdom(const VelodyneOdomParams &param);
+  inline bool set_temporal_kf_mode(bool kf_mode){ 
+    _temporal_kf_mode = kf_mode; 
+    return _temporal_kf_mode;
+  }
+  inline bool get_temporal_kf_mode(){return _temporal_kf_mode;}
+  inline double set_temporal_kf_interval(double intervar){ 
+    _temporal_kf_interval = intervar; 
+    return _temporal_kf_interval;
+  }
+  inline double get_temporal_kf_interval(){return _temporal_kf_interval;}
 	// This function gets a point cloud as input and stores it locally to
 	// later register with '_local_map'. This happens when the programmer
 	// explicitely calls one of the 'align(...)' functions. If the point cloud
 	// is proper, this function returns '0', otherwise '-1'.
 	int push_pc(const sensor_msgs::PointCloud2 &pc);
+	int push_pc(const sensor_msgs::PointCloud2 &pc1, const sensor_msgs::PointCloud2 &pc2);
+	int push_pc(pcl::PointCloud<pcl::PointXYZ>::Ptr pc);
 	// These functions align the most recently pushed pointcloud with the
 	// keyframe. The programmer can give an initial estimate to help the
 	// PCL alignment functions. If the alignment succeeds, this function

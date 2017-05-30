@@ -4,34 +4,56 @@
 
 <launch>
 
-<!--
-<include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch" />
-<include file="$(find mavros)/launch/px4.launch" />
--->
+<arg name="bagfile_path00" value="$(env ROS_DATASET_PATH)/inspot_2016-07-11-16-36-54.bag" />
+<arg name="bagfile_path01" value="$(env ROS_DATASET_PATH)/inspot_2016-07-11-16-55-18.bag" />
+<arg name="bagfile_path02" value="$(env ROS_DATASET_PATH)/inspot_2016-07-11-16-56-55.bag" />
+<arg name="bagfile_path03-SHORT" value="$(env ROS_DATASET_PATH)/inspot_2016-07-11-17-00-40.bag" />
+<arg name="bagfile_path04" value="$(env ROS_DATASET_PATH)/inspot_2016-07-11-17-04-56.bag" />
 
-<!--
-	+ 17.bag is very fast dataset. I need to increase # of iters and the bbox dims.
-	+ 19.bag flies in wide openings. It loses track when no objects around.
-	+ 12.bag is tilts too much. Puck cannot see object forward-backward
--->
+<arg name="bagfile_path05-SHORT" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-11-24-16.bag" />
+<arg name="bagfile_path06" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-11-25-26.bag" />
+<arg name="bagfile_path07" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-11-42-21.bag" />
+<arg name="bagfile_path08" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-11-51-02.bag" />
 
-<arg name="bagfile_path" value="$(env ROS_DATASET_PATH)/velodyne/velodyne18.bag" />
+<arg name="bagfile_path09" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-12-18-19.bag" />
+<arg name="bagfile_path10" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-12-28-12.bag" />
+<arg name="bagfile_path11-SHORT" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-12-40-53.bag" />
+<arg name="bagfile_path12" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-12-41-51.bag" />
+
+<arg name="bagfile_path13" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-16-40-59.bag" />
+<arg name="bagfile_path14-SHORT" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-16-49-12.bag" />
+<arg name="bagfile_path15" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-16-53-01.bag" />
+
+<arg name="bagfile_path16" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-17-02-45.bag" />
+<arg name="bagfile_path17" value="$(env ROS_DATASET_PATH)/inspot_2016-07-12-17-11-26.bag" />
+
+<arg name="bagfile_path" value="$(arg bagfile_path02)" />
+<arg name="imu_velo_time_offset" value="0.25" />
+<arg name="exclude_x_pos" value="TRUE" />
+<arg name="temporal_kf_mode" value="TRUE" />
+<arg name="temporal_kf_interval" value="1.0" />
 
 <node pkg="rosbag"
       name="play"
       type="play"
       output="screen"
-      args=" --pause $(arg bagfile_path) --rate=0.99 --start=0 --duration=999 " />
+      args="--pause  $(arg bagfile_path) --rate=1.00 --start=00 --duration=999 " >
+      <remap from="/camera/depth/points" to="/realsense_pointsSSSSSSS" />
+      <remap from="/velodyne_point_cloud" to="/velodyne_points" />
+</node>
 
 <node pkg="tf" 
       type="static_transform_publisher" 
       name="fcu_link_publisher" 
       args="0 0 0 0 0 0 fcu velodyne 100" />
+
 <!--
+
 <node pkg ="rviz"
       name="rviz"
       type="rviz"
       args="-d $(find velodyne_odom)/rviz/velodyne_odom.rviz"/>
+
 -->
 
 <node pkg ="velodyne_odom"
@@ -41,12 +63,22 @@
 
       <rosparam file="$(find velodyne_odom)/config/velodyne_odom_params.yaml" />
       <param name="debug_mode"        value = "false"        />
+      <param name="exclude_x_pos"        value = "$(arg exclude_x_pos)"        />
+      <param name="roll"        value = "0.655"        />
+      <param name="pitch"        value = "3.14"        />
+      <param name="yaw"        value = "-1.57"        />
+      <param name="imu_velo_time_offset" value = "$(arg imu_velo_time_offset)"/>
+      <param name="temporal_kf_mode" value = "$(arg temporal_kf_mode)"/>
+      <param name="temporal_kf_interval" value = "$(arg temporal_kf_interval)"/>
       <remap from="~/imu"             to="/mavros/imu/data" />
       <remap from="~/range"           to="/mavros/distance_sensor/hrlv_ez4_pub" />
       <remap from="~/velodyne_points" to="/velodyne_points" />
+      <remap from="~/realsense_points" to="/realsense_points" />
       <remap from="~/odom" to="/velodyne_odom" />
       <remap from="~/init_odom" to="/control_odom" />
 </node>
+
+<!--
 
 <node name="velodyne_odom_visualization"
       pkg ="odom_visualization"
@@ -75,7 +107,7 @@
       <param name="debug_mode"  value = "false"        />
       <param name="axis_length" value = "0.33"        />
 </node>
-
+-->
 <node name="quadrotor_ukf"
       pkg ="quadrotor_ukf_lite"
       type="quadrotor_ukf"
@@ -85,5 +117,7 @@
       <remap from="~odom_slam" to="/velodyne_odom"/>
       <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
 </node>
+
+
 
 </launch>

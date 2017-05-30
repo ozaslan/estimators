@@ -1,18 +1,19 @@
 voxel_leaf_size:
- x: 0.25
- y: 0.25
- z: 0.25
+ x: 0.30
+ y: 0.30
+ z: 0.30
 
 # ICP usually cannot handle rotations. For such cases, use NICP or NDT
 method: "NDT"
 
 # Normal distribution transform (NDT) parameters for odometry.
 ndt:
- eps: 0.01
+ eps: 0.05
  step_size: 1.5
+# step_size: 1.5
  res: 1.0
  max_iter: 55
- fitness_score_thres: 1200
+ fitness_score_thres: 800 # smaller score, tighter the acceptance
 
 icp:
   use_reciprocal_corr: FALSE
@@ -33,7 +34,7 @@ gicp:
 
 nicp:
   use_reciprocal_corr: TRUE
-  max_corr_dist: 0.5
+  max_corr_dist: 0.3
   max_iter: 50
   # The epsilon (difference) between the previous transformation and 
   # the current estimated transformation
@@ -53,11 +54,13 @@ local_map_max_points: 3000
 
 # Dimensions of the bounding box '_local_map' centered at the current pose. 
 local_map_dims:
- x: 40
- y: 40
- z: 40
+ x: 20
+ y: 20
+ z: 20
 
 init_keyframe_thres:
- trans: 2.0
- rot: 0.1744 # ~10 degrees (in radians)
+ trans: 0.750
+ rot: 0.3488 # ~10 degrees (in radians)
+# trans: 1.0
+# rot: 0.1744 # ~10 degrees (in radians)
 

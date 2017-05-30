@@ -10,8 +10,8 @@
 #include <visualization_msgs/Marker.h>
 
 #include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
-
 
 #include <pcl/point_types.h>
 #include <pcl_ros/point_cloud.h>
@@ -60,7 +60,7 @@ double	linearity_thres			 = 0.3;
 // -------- COMMUNICATION INTERFACE DECLERATIONS ---------------------------------------------- //
 // * Required publication channels
 ros::Publisher odom_publ;
-image_transport::Publisher flow_img_publ;
+image_transport::Publisher flow_img_publ, backproj_img_publ;
 // * Required subscription channels
 ros::Subscriber 
 	imu_subs,
@@ -73,7 +73,8 @@ ros::Publisher
 	laser_pc_publ,
 	res_rays_publ,
 	map_pc_publ,
-	flow_rays_publ;
+	flow_rays_publ,
+	backproj_imgs_pc_publ;
 // * Message declerations (### I might want to declare these locally)
 sensor_msgs::LaserScan bot_lidar_msg, top_lidar_msg;
 sensor_msgs::Image	top_cam_msg, bot_cam_msg, 
@@ -86,6 +87,7 @@ visualization_msgs::Marker res_rays_msg, flow_rays_msg;
 LaserProc top_lidar_proc, bottom_lidar_proc;
 bool is_top_lidar_valid, is_bottom_lidar_valid;
 bool is_right_cam_valid, is_left_cam_valid;
+bool is_top_cam_valid, is_bot_cam_valid;
 // * Calibration data is given as an argument together with
 //   the corresponding sensor data.
 CameraCalibParams top_cam_calib_params;
@@ -128,3 +130,4 @@ void publish_res_rays();
 void publish_flow_rays();
 void publish_map();
 void publish_laser();
+void publish_backprojected_images();

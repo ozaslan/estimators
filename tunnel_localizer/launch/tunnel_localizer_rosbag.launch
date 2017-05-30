@@ -12,11 +12,16 @@ Example launch file: launches the scan matcher with pre-recorded data
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jan_khex_statefarm/1.bag" />
 <arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/13Jul2015TowneBase/towne06.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/towne_basement.pcd" />
+<arg name="map_path"      value="$(find map_server)/maps/glen_penstock_inclined.pcd" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/glen_canyon_22July2015_after_lunch/06.bag" />
 -->
 
 # 3 needs work
+# 16.bag is the inclination
+# Problem in glen_penstock_incline/01.bag occurs at [89-91] sec.
+# *** Show after lunch 04.bag [start 70] and 06.bag
 
-<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/glen_canyon_21July2015/07.bag" />
+<arg name="bagfile_path"  value="$(env ROS_DATASET_PATH)/glen_canyon/monocular/07.bag" />
 <arg name="map_path"      value="$(find map_server)/maps/glen_penstock_horizontal.pcd" />
 
 <!-- carters_gazebo/1.bag from 122 for 3 secs. works well -->
@@ -25,11 +30,11 @@ Example launch file: launches the scan matcher with pre-recorded data
 		name  ="rosbag"
 		type  ="play"
     output="screen"
-    args  ="--loop --rate=1 $(arg bagfile_path) --start=70 --duration=777 --delay=5 ">
+    args  ="--loop --rate=0.55 $(arg bagfile_path) --start=10 --duration=9999 --delay=5 ">
     <remap from="/control_odom" to="/dummy1" />
     <remap from="/tunnel_localizer/odom_out" to="dummy2" />
     <!--
-    <remap from="/raw_imu" to="/khex/imu" />
+        <remap from="/raw_imu" to="/khex/imu" />
     <remap from="/raw_imu" to="/khex/imu" />
     <remap from="/cam0/image/compressed" to="/cam2/image" />
     <remap from="/cam1/image/compressed" to="/cam0/image" />
@@ -55,8 +60,8 @@ Example launch file: launches the scan matcher with pre-recorded data
 		<param name="debug_mode"	value="FALSE"/>
 		<param name="refresh_rate"	value="40.0"/>	
 		<param name="map_path"		value="$(arg map_path)"/>
-		<param name="top_lidar_calib_file"		  value="$(find calib_data)/lidar/glen_ins_khex_top_lidar.yaml"/>
-		<param name="bottom_lidar_calib_file"	  value="$(find calib_data)/lidar/glen_ins_khex_bottom_lidar.yaml"/>
+		<param name="top_lidar_calib_file"		  value="$(find calib_data)/lidar/ins_khex_top_lidar.yaml"/>
+		<param name="bottom_lidar_calib_file"	  value="$(find calib_data)/lidar/ins_khex_bottom_lidar.yaml"/>
 		<param name="top_cam_calib_file"        value="$(find calib_data)/camera/ins_khex_top_cam.yaml"/>
 		<param name="right_cam_calib_file"		  value="$(find calib_data)/camera/ins_khex_right_cam.yaml"/>
 		<param name="bottom_cam_calib_file"		  value="$(find calib_data)/camera/ins_khex_bottom_cam.yaml"/>
@@ -70,7 +75,7 @@ Example launch file: launches the scan matcher with pre-recorded data
 	  type="quadrotor_ukf" 
 	  output="screen">
       <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
-      <remap from="~imu" to="/khex/imu"/> 
+      <remap from="~imu" to="/khex_com/imu"/> 
       <remap from="~odom_slam" to="/tunnel_localizer/odom_out"/>
 </node> 
 

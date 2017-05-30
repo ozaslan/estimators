@@ -40,8 +40,13 @@
   
   <arg name="bagfile_path28" value="/media/ozaslan/research_backup/inspot/MayTrip/phase1/inspot_2017-05-03-15-53-26.bag"/> 
   <arg name="bagfile_path29" value="/media/ozaslan/research_backup/inspot/MayTrip/phase2/inspot_2017-05-03-16-14-27.bag"/> 
+  
+  <arg name="bagfile_path30" value="/media/ozaslan/research_backup/inspot/MayTrip/Day3/phase1/inspot_2017-05-04-14-48-45.bag"/> 
+  <arg name="bagfile_path31" value="/media/ozaslan/research_backup/inspot/MayTrip/Day3/phase1/inspot_2017-05-04-15-02-21.bag"/>   
+  <arg name="bagfile_path32" value="/media/ozaslan/research_backup/inspot/MayTrip/Day3/phase1/inspot_2017-05-04-15-17-27.bag"/> 
+  <arg name="bagfile_path33" value="/media/ozaslan/research_backup/inspot/MayTrip/Day3/phase1/inspot_2017-05-04-15-24-28.bag"/> 
 
-  <arg name="bagfile_path" value="$(arg bagfile_path29)"/>
+  <arg name="bagfile_path" value="$(arg bagfile_path33)"/>
   <arg name="debug_mode"   value="FALSE"/>
 
   <arg name="use_gdb" value="FALSE" />
@@ -53,7 +58,7 @@
   </group>
 
 
-  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.999 --start=70 --duration=1000 --clock">
+  <node pkg="rosbag" name="play" type="play" output="screen" args="--loop  $(arg bagfile_path) --rate=0.999 --start=20 --duration=400 --clock">
     <remap from="/velodyne_point_cloud" to="/velodyne_points"/>
     <remap from="/quadruple/bottom_left/image_raw/compressed"  to="/cam/bottom_left/compressed"/>
     <remap from="/quadruple/bottom_right/image_raw/compressed" to="/cam/bottom_right/compressed"/>

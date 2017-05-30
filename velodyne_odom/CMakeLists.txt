@@ -1,20 +1,51 @@
-cmake_minimum_required(VERSION 2.4.6)
-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+cmake_minimum_required(VERSION 2.8.12)
 
-# Set the build type.  Options are:
-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
-#  Debug          : w/ debug symbols, w/o optimization
-#  Release        : w/o debug symbols, w/ optimization
-#  RelWithDebInfo : w/ debug symbols, w/ optimization
-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-#set(ROS_BUILD_TYPE RelWithDebInfo)
+project(velodyne_odom)
 
-rosbuild_init()
+# Get the information about this package's buildtime dependencies
+find_package(PCL 1.7.2 REQUIRED)
+find_package(catkin REQUIRED COMPONENTS 
+              roscpp 
+              mavros 
+              geometry_msgs 
+              sensor_msgs
+              nav_msgs
+              pcl_ros
+              cv_bridge
+              utils 
+              cmake_modules)
 
-FIND_PACKAGE(GTSAM REQUIRED)
-FIND_PACKAGE(PCL 1.7.2 REQUIRED)
+# Declare the message files to be built
+#  add_message_files(FILES
+#      MyMessage1.msg
+#      MyMessage2.msg
+#      )
 
-include_directories(${PCL_INCLUDE_DIRS})
+# Actually generate the language-specific message and service files
+# generate_messages(DEPENDENCIES std_msgs sensor_msgs)
+
+# Declare that this catkin package's runtime dependencies
+catkin_package(CATKIN_DEPENDS 
+              mavros 
+              sensor_msgs 
+              nav_msgs 
+              pcl_ros
+              cv_bridge 
+	      utils
+              geometry_msgs)
+
+catkin_package(
+   INCLUDE_DIRS include
+   LIBRARIES velodyne_odom
+   CATKIN_DEPENDS utils
+   DEPENDS eigen)
+
+
+include_directories(${PCL_INCLUDE_DIRS} 
+                    include
+                    ${catkin_INCLUDE_DIRS}
+                    ${INCLUDE_DIRS})
+
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
@@ -33,15 +64,10 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 #set the default path for built libraries to the "lib" directory
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-#uncomment if you have defined messages
-#rosbuild_genmsg()
-#uncomment if you have defined services
-#rosbuild_gensrv()
-
 #common commands for building c++ executables and libraries
-rosbuild_add_library(${PROJECT_NAME} src/velodyne_odom.cc)
-target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} gtsam)
-#rosbuild_add_boost_directories()
-#rosbuild_link_boost(${PROJECT_NAME} thread)
-rosbuild_add_executable(${PROJECT_NAME}_node src/velodyne_odom_node.cc)
-target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME} gtsam) 
+add_library(velodyne_odom src/velodyne_odom.cc)
+# add_library(utils src/utils.cc src/trans_utils.cc)
+target_link_libraries(velodyne_odom ${PCL_LIBRARIES} utils)
+add_executable(velodyne_odom_node src/velodyne_odom_node.cc)
+# target_link_libraries(velodyne_odom_node velodyne_odom utils ${catkin_LIBRARIES}) 
+target_link_libraries(velodyne_odom_node velodyne_odom ${catkin_LIBRARIES}) 

@@ -84,7 +84,7 @@ class VisionBasedTunnelLocalizer{
 		bool _reset();
 	public:
 		// 
-		VisionBasedTunnelLocalizer(int num_feats = 100, int history_len = 7, 
+		VisionBasedTunnelLocalizer(int num_feats = 100, int history_len = 2, 
 				string detector_type = string("FAST"), 
 				double threshold = 5);
 		// This function calculates the displacement along the tunnel axis (world-x dir.) by 

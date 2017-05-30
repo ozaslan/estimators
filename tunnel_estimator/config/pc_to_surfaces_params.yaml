@@ -6,15 +6,15 @@ pc2surfaces:
   normal_dev_thres2: 10.0
   curvature_thres: 0.1
   contour_fit_thres: 0.10
-  sphere_r: 11.3
+  sphere_r: 13.3
   normal_search_radius: 0.35
   contour_type: "circle"
-  segment_len: 3
+  segment_len: 3.5
   max_segment_dist: 1.2
   max_segment_rot: 0.184
   num_segments: 111
   voxel_leaf_size: 0.25
-  var_r: 0.03
-  var_azimuthal: 0.017
-  var_elevation: 0.017
+  var_r: 0.001
+  var_azimuthal: 0.001
+  var_elevation: 0.001
   

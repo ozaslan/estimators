@@ -24,42 +24,9 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 <include file="$(find khex_com)/launch/khex_com.launch" />
 <include file="$(find vicon_odom)/launch/test.launch" />
+<include file="$(find bluefox_node)/launch/run_right_cam.launch" />
 
-<node pkg   ="bluefox_node"
-      name  ="bluefox0"
-      type  ="bluefox_node"
-      output="screen">
-                         
-  	  <param name="camera_idx"   value="0" />
-	  <param name="camera_serial" value="29900212" type="str"/>
-	  <param name="camera_name"  value="cam2" />
-	  <param name="exposure_us"  value="20000" />
-	  <param name="hdr_mode"     value="1" />
-	  <param name="gain_dB"		 value="0.1" />
-	  <param name="color_mode"   value="false" />
-	  <param name="fps"          value="40.0" />
-	  <param name="width"        value="640" />
-	  <param name="height"       value="480" />
-	
-</node>
-
-<node pkg   ="bluefox_node"
-      name  ="bluefox1"
-      type  ="bluefox_node"
-      output="screen">
-                         
-  	  <param name="camera_idx"   value="1" />
-	  <param name="camera_serial" value="29900227" type="str"/>
-	  <param name="camera_name"  value="cam2" />
-	  <param name="exposure_us"  value="20000" />
-	  <param name="hdr_mode"     value="1" />
-	  <param name="gain_dB"		 value="0.1" />
-	  <param name="color_mode"   value="false" />
-	  <param name="fps"          value="40.0" />
-	  <param name="width"        value="640" />
-	  <param name="height"       value="480" />
-	
-</node>
+<!--
 
 <node pkg   ="image_view"
 	  name  ="image_view0"
@@ -76,13 +43,13 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 	  <remap from="/image" to="/cam1/image"/>
 </node>
-
+-->
 
 <node pkg = "rosbag"
   name = "rosbag"
   type = "record"                                                                                                                                                    
   output = "screen"
-  args="/khex_com/cmd /khex_com/status /khex_com/rc /khex_com/imu /scan/bottom /scan/top vicon/InsKHex_odom /cam2/image/compressed ">
+  args="/khex_com/cmd /khex_com/status /khex_com/rc /khex_com/imu /scan/bottom /scan/top vicon/InsKHex_odom /cam0/image ">
 </node>
 
 

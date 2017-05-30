@@ -1,6 +1,11 @@
 #include "vision_based_tunnel_localizer.hh"
 #include <opencv2/core/eigen.hpp>
 
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/density.hpp>
+using namespace boost::accumulators;
+
 #define DEBUG 0
 #if DEBUG == 1
 	#define DEBUG_MSG PRINT_FLF
@@ -8,8 +13,7 @@
 	#define DEBUG_MSG 
 #endif
 
-VisionBasedTunnelLocalizer::VisionBasedTunnelLocalizer(int num_feats, int history_len, 
-		string detector_type, double threshold){
+VisionBasedTunnelLocalizer::VisionBasedTunnelLocalizer(int num_feats, int history_len, string detector_type, double threshold){
 	DEBUG_MSG
 	_feat_buffer_idx = 0;
 	_num_feats = num_feats;
@@ -41,6 +45,10 @@ bool VisionBasedTunnelLocalizer::push_camera_data(const vector<cv::Mat> &frames,
 
 	// ### Parallelize this part with boost or p_thread.
 	for(int t = 0 ; t < (int)_trackers.size() ; t++){
+		cv::equalizeHist( frames[t], frames[t] );
+		//cv::blur(frames[t], frames[t], cv::Size(5, 5));
+		cv::adaptiveThreshold(frames[t], frames[t], 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 23, 0);
+		cv::blur(frames[t], frames[t], cv::Size(7, 7));
 		_trackers[t].track_features(frames[t], _extractor, _cam_params[t].image_mask);
     /*
 		if(t == 0){
@@ -53,8 +61,7 @@ bool VisionBasedTunnelLocalizer::push_camera_data(const vector<cv::Mat> &frames,
     */
 		if(_feats[!_feat_buffer_idx][t].size() == 0){
 			//cout << "Filling up the other buffer" << endl;
-			_trackers[t].get_features(   _feats[!_feat_buffer_idx][t], 
-					_feat_ids[!_feat_buffer_idx][t], 0);
+			_trackers[t].get_features(   _feats[!_feat_buffer_idx][t], _feat_ids[!_feat_buffer_idx][t], 3);
 			cv::undistortPoints(_feats[!_feat_buffer_idx][t], _feats[!_feat_buffer_idx][t], 
 					_cam_params[t].camera_matrix, _cam_params[t].dist_coeffs);
 			_poses[!_feat_buffer_idx] = pose;
@@ -166,9 +173,15 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 	int num_trackers = _trackers.size();
 	for(int t = 0 ; t < num_trackers ; t++){
 		//cout << "before feat_ids.size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
-		_trackers[t].get_features(   _feats[_feat_buffer_idx][t], _feat_ids[_feat_buffer_idx][t], 0);
+		_trackers[t].get_features(   _feats[_feat_buffer_idx][t], _feat_ids[_feat_buffer_idx][t], 3);
 		cv::undistortPoints(_feats[_feat_buffer_idx][t] , _feats[_feat_buffer_idx][t], 
 							_cam_params[t].camera_matrix, _cam_params[t].dist_coeffs);
+
+		cv::Mat plot_image(480, 640, CV_8UC3, Scalar(255,255,255));
+		_trackers[t].plot_flow(plot_image);
+		cv::namedWindow("plot_image");
+		cv::imshow("plot_image", plot_image);
+		cv::waitKey(1);
 
 		//cout << "after feat_ids.size() = " << _feat_ids[_feat_buffer_idx][t].size() << endl;
 		/*
@@ -223,10 +236,10 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 					if(i != j){
 						//cout << "P2.2.3.2.1" << endl;fflush(NULL);
 						std::swap(_feat_ids[!_feat_buffer_idx][t][i],
-								_feat_ids[!_feat_buffer_idx][t][j]);
+								  _feat_ids[!_feat_buffer_idx][t][j]);
 						//cout << "P2.2.3.2.2" << endl;fflush(NULL);
 						std::swap(_feats[!_feat_buffer_idx][t][i],
-								_feats[!_feat_buffer_idx][t][j]);
+								  _feats[!_feat_buffer_idx][t][j]);
 						//cout << "P2.2.3.2.3" << endl;fflush(NULL);
 					}
 					num_tracked_feats++;
@@ -269,7 +282,7 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 		// (2) - camera -> robot frame
 		// (3) - robot -> world frame
 		tail_trans = (_poses[!_feat_buffer_idx].topLeftCorner<3, 3>() * 
-				_cam_params[t].relative_pose.topLeftCorner<3, 3>() /*  
+				       _cam_params[t].relative_pose.topLeftCorner<3, 3>() /*  
 				_inv_camera_matrices[t]*/).cast<float>();
 		tip_trans  = (_poses[_feat_buffer_idx].topLeftCorner<3, 3>() * 
 				_cam_params[t].relative_pose.topLeftCorner<3, 3>() /*  
@@ -358,7 +371,7 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 			double cos_th = tail_dir.dot(tip_dir) / tail_dir_norm / tip_dir_norm;
 			x_disps[i] = sqrt(tail_dir_norm_sq + tip_dir_norm_sq - 2 * tail_dir_norm * tip_dir_norm * cos_th);
 			*/
-			x_disps[i] = -(tip_dir[0] - tail_dir[0]);
+			x_disps[i] = -(tip_dir(0) - tail_dir(0));
 			//cout << "x_disps[" << i << "] = " << x_disps[i] << endl;
 		}
 	}
@@ -369,31 +382,82 @@ bool VisionBasedTunnelLocalizer::estimate_displacement(double &x_disp){
 	_x_disp = 0;
 
 	if(x_disps.size() != 0){
-		//std::sort(x_disps.begin(), x_disps.end());
+		std::sort(x_disps.begin(), x_disps.end());
 		//x_disp = _x_disp = x_disps[x_disps.size() / 2.0];
 		
-		for(int i = 0 ; i < (int)x_disps.size() ; i++)
+		for(int i = 0 ; i < (int)x_disps.size() ; i++){
 			_x_disp += x_disps[i];
+			//cout << "x_disp(" << i << ") = " << x_disps[i] << ";" << endl;
+		}
 		_x_disp /= x_disps.size();
+		//cout << "mean = " << _x_disp << ";" << endl;
 		for(int i = 0 ; i < (int)x_disps.size() ; i++){
 			_x_var += pow(x_disps[i] - _x_disp, 2.0);
-			//cout << "x_disps[" << i << "] = " << x_disps[i] << endl;
+			//cout << "x_disps(" << i << ") = " << x_disps[i] << endl;
 			//cout << "delta_x[" << i << "] = " << tip_origin(0) - tail_origin(0) << endl;
 		}
 		_x_var /= x_disps.size();
 	}
 
-	//cout << "_x_disp = " << _x_disp << " _x_var = " << _x_var << endl;
 
 	_feat_buffer_idx = !_feat_buffer_idx;
 
 	//cout << "P7" << endl; fflush(NULL);
+
+  accumulator_set<double, stats<tag::density > > acc(tag::density::cache_size=x_disps.size(), tag::density::num_bins=3);
+  typedef boost::iterator_range<std::vector<std::pair<double, double> >::iterator > histogram_type;
+
+  
+  for(std::size_t i = 0; i < (int)x_disps.size(); i++) {
+    acc(x_disps[i]);
+  }
+  histogram_type histogram = density(acc);
+  for (std::size_t i = 0; i < histogram.size(); ++i) {
+    cout << "First: " << histogram[i].first << "\t Second: " << histogram[i].second << endl;
+  }
+ 
+  vector<int> bins_to_include;
+  double max_bin_perc = histogram[0].second;
+  int max_bin_ind = 0;
+  for(int i = 1 ; i < histogram.size() ; i++){
+    if(max_bin_perc < histogram[i].second){
+      max_bin_perc = histogram[i].second;
+      max_bin_ind = i;
+    }
+  }
+
+  bins_to_include.push_back(max_bin_ind);
+
+  double bin_min = histogram[max_bin_ind].first;
+  double bin_max = (max_bin_ind == histogram.size() - 1) ? 99999 : histogram[max_bin_ind + 1].first;
+  cout << "bin_min = " << bin_min << " bin_max = " << bin_max << endl; 
+  _x_disp = 0;
+  int num_disps = 0;
+  for(int i = 0 ; i < x_disps.size() ; i++){
+    if(x_disps[i] >= bin_min && x_disps[i] < bin_max){
+      _x_disp += x_disps[i];
+      num_disps++;
+    }
+  }
+  _x_disp /= (num_disps + 0.00001);
+  _x_disp /= 1.5;
+
+	cout << "_x_disp = " << _x_disp << " _x_var = " << _x_var << endl;
+  /*
+  double perc = 0.75;
+  for(int i = 0 ; i < histogram.size() ; i++){
+    
+    if()  
+  }
+  */
+
 	DEBUG_MSG
 	return true;
 }
 
 bool VisionBasedTunnelLocalizer::get_displacement(double &x_disp){
 	x_disp = _x_disp;
+  _x_disp = 0;
 	return true;
 }
 

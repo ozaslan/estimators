@@ -165,14 +165,12 @@ int OpticalFlowEstimator::plot_of_field(cv::Mat &image){
 }
 
 
-int OpticalFlowEstimator::cluster_planes(){
+cv::Mat OpticalFlowEstimator::cluster_planes(){
 	if(_tails.size() == 0 || _tips.size() != _tails.size()){
 		_cluster_ids.clear();
 		return -1;
 	}
 
 	//++: Mat findHomography(InputArray srcPoints, InputArray dstPoints, int method=0, double ransacReprojThreshold=3, OutputArray mask=noArray() )¶
-	cv::findHomography(_tails, _tips, cv::RANSAC, 3, _cluster_ids);
-
-	return 0;
+	return cv::findHomography(_tails, _tips, cv::RANSAC, 1.3, _cluster_ids);
 }

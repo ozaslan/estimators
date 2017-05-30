@@ -1,0 +1,47 @@
+<launch>
+<!--
+<node pkg ="rviz"
+      name="rviz"
+      type="rviz"
+      args="-d $(find velodyne_odom)/rviz/velodyne_odom.rviz"/>
+-->
+<node name="velodyne_odom_visualization"
+      pkg ="odom_visualization"
+      type="odom_visualization_node"
+      output="screen" >
+                         
+      <remap from="~odom" to="/velodyne_odom"/>
+      <rosparam file="$(find odom_visualization)/config/config03.yaml" />
+</node>
+
+<node name="control_odom_visualization"
+      pkg ="odom_visualization"
+      type="odom_visualization_node"
+      output="screen" >
+                         
+      <remap from="~odom" to="/Inspot/odom"/>
+      <rosparam file="$(find odom_visualization)/config/config02.yaml" />
+</node>
+
+<!--
+<node pkg="rqt_image_view"
+      name ="rqt_imageview_bottom_right"
+      type="rqt_image_view"
+      output="screen" >
+                         
+      <param name="image" value="/quadruple/bottom_right/image_raw/compressed" />
+</node>
+-->
+<!--
+<node name="pose_graph_visualization"
+      pkg ="pose_graph_visualization"
+      type="pose_graph_visualization_node"
+      output="screen" >
+                         
+      <remap from="~pose_graph" to="/velodyne_odom_node/pose_graph"/>
+      <param name="debug_mode"  value = "false"        />
+      <param name="axis_length" value = "0.33"        />
+</node>
+-->
+
+</launch>

@@ -48,7 +48,7 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const LaserProc &laser_proc, boo
 
 	// Accumulate information due to the laser scanner onto the _fim matrix.
 	// Each additional information is in the body frame. In the 'get_covariance(...)'
-	// function (if points have to been registered) this is projected onto the world 
+	// function (if points have to been registered) this is projected onto the world
 	// frame.
 	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();      // Fisher information for x, y, z coords.
 	Eigen::Matrix3d dcm     = laser_proc.get_calib_params().relative_pose.topLeftCorner<3, 3>();  // Rotation matrix
@@ -63,7 +63,7 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const LaserProc &laser_proc, boo
 
 	fim_xyz = dcm * fim_xyz * dcm.transpose();
 
-	fi_p = fim_xyp(2, 2) * fabs(dcm(2, 2));
+	fi_p = fabs(fim_xyp(2, 2)) * fabs(dcm(2, 2));
 
 	//cout << "dcm = [" << dcm << "];" << endl;
 
@@ -101,12 +101,12 @@ bool RangeBasedTunnelLocalizer::push_laser_data(const Eigen::Matrix4d &rel_pose,
 
 	// Accumulate information due to the laser scanner onto the _fim matrix.
 	// Each additional information is in the body frame. In the 'get_covariance(...)'
-	// function (if points have to been registered) this is projected onto the world 
+	// function (if points have to been registered) this is projected onto the world
 	// frame.
 	Eigen::Matrix3d fim_xyz = Eigen::Matrix3d::Zero();			// Fisher information for x, y, z coords.
 	Eigen::Matrix3d dcm		= rel_pose.topLeftCorner<3, 3>();	// Rotation matrix
-	Eigen::Matrix3d fim_xyp;									// Fisher information for x, y, yaw
-	double fi_p = 0;											// Fisher information for yaw only (neglecting correlative information)
+	Eigen::Matrix3d fim_xyp;						// Fisher information for x, y, yaw
+	double fi_p = 0;							// Fisher information for yaw only (neglecting correlative information)
 
 	utils::laser::get_fim(data, mask, fim_xyp, cluster_id);
 
@@ -149,14 +149,14 @@ bool RangeBasedTunnelLocalizer::push_rgbd_data(const Eigen::Matrix4d &rel_pose, 
 	return true;
 }
 
-int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
+int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, double heading){
 	// ### This will cause memory leak!!!
 	_cloud_aligned = pcl::PointCloud<pcl::PointXYZ>().makeShared();
 	// Initialize '_cloud_aligned' by transforming the collective point cloud
 	// with the initial pose.
 	pcl::transformPointCloud(*_cloud, *_cloud_aligned, init_pose);
 
-	// Steps : 
+	// Steps :
 	// (1) - For each ray, find the point of intersection. Use ray-casting of PCL-Octree
 	// (2) - Prepare the matrix A and vector b s.t.  A*x = b
 	// (3) - Solve for A*x = b where x = [cos(th) sin(th), dy, dz]'.
@@ -168,7 +168,7 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 
 	Eigen::MatrixXd A(num_pts, 3);
 	Eigen::VectorXd b(num_pts);
-	Eigen::Vector3d x, rpy;	// solution to Ax=b, 
+	Eigen::Vector3d x, rpy;	// solution to Ax=b,
 	// roll-pitch-yaw
 	Eigen::Vector3f pos;	// initial position of the robot.
 	// This is given as argument to ray-caster.
@@ -203,20 +203,20 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 			if(voxel_centers.size() == 0){
 				A.block<1, 3>(i, 0) *= 0;
 				b(i)				 = 0;
-				_matched_map_pts[i].x = 
-					_matched_map_pts[i].y = 
+				_matched_map_pts[i].x =
+					_matched_map_pts[i].y =
 					_matched_map_pts[i].z = std::numeric_limits<float>::infinity();
 			} else {
 				// Save the matched point
 				_matched_map_pts[i] = voxel_centers[0];
-				// Use only the y-comp of the residual vector. Because 
+				// Use only the y-comp of the residual vector. Because
 				// this is going to contribute to y and yaw updates only.
 				b(i) = voxel_centers[0].y - pos(1);
-				// Get the residual vector 
+				// Get the residual vector
 				res_vec(0) = _cloud_aligned->points[i].x - voxel_centers[0].x;
 				res_vec(1) = _cloud_aligned->points[i].y - voxel_centers[0].y;
 				res_vec(2) = _cloud_aligned->points[i].z - voxel_centers[0].z;
-				// Update the delta-z-estimate according to the direction of the 
+				// Update the delta-z-estimate according to the direction of the
 				// corresponding ray's z component. The update factor is weighed using
 				// ML outlier elimination.
 				dTz += -res_vec(2) * (exp(fabs(ray(2) / ray.norm())) - 1);
@@ -234,6 +234,19 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 			}
 		}
 
+		// ####
+		/*
+		if(num_valid_pts < 100){
+			continue;
+		}
+		*/
+
+		/*
+		cout << "heading = " << heading << endl;
+		cout << "A = " << A << endl;
+		cout << "b = " << b << endl;
+		*/
+
 		// Solve for the least squares solution.
 		x = (A.transpose() * A).inverse() * A.transpose() * b;
 
@@ -248,14 +261,17 @@ int RangeBasedTunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
 		double dyaw = -1.2 * atan2(x(1), x(0));
 
 		// Update the position
-		pos(1) += x(2); // y-update 
+		pos(1) += x(2); // y-update
 		pos(2) += dTz;	// z-update
 
-		// Convert the orientation to 'rpy', update yaw and 
+		// Convert the orientation to 'rpy', update yaw and
 		// convert back to dcm.
 		Eigen::Matrix3d dcm = curr_pose.topLeftCorner<3, 3>();
 		rpy = utils::trans::dcm2rpy(dcm);
 		rpy(2) += dyaw;
+
+		//rpy(2) = heading; //####
+
 		dcm = utils::trans::rpy2dcm(rpy);
 
 		// Update the global pose matrix.
@@ -280,7 +296,7 @@ bool RangeBasedTunnelLocalizer::get_pose(Eigen::Matrix4d &pose){
 	return true;
 }
 
-bool RangeBasedTunnelLocalizer::get_registered_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){	
+bool RangeBasedTunnelLocalizer::get_registered_pointcloud(pcl::PointCloud<pcl::PointXYZ>::Ptr &pc){
 	pc = _cloud_aligned;
 	return true;
 }
@@ -328,8 +344,8 @@ bool RangeBasedTunnelLocalizer::get_covariance(Eigen::Matrix6d &cov, bool apply_
 	//cout << "D = [" << D << "];" << endl;
 	//cout << "cov = [ " << cov << "];" << endl;
 
-	cov.topLeftCorner<3, 3>	() = _pose.topLeftCorner<3, 3>().transpose() * 
-									cov.topLeftCorner<3, 3>() * 
+	cov.topLeftCorner<3, 3>	() = _pose.topLeftCorner<3, 3>().transpose() *
+									cov.topLeftCorner<3, 3>() *
 								 _pose.topLeftCorner<3, 3>();
 
 	// Exclude the pose estimate along the x direction.

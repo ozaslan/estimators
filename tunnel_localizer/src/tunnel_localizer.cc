@@ -205,11 +205,11 @@ bool TunnelLocalizer::push_camera_data(const sensor_msgs::Image &data, const Cam
 	DEBUG_MSG;
 }
 
-bool TunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose){
+bool TunnelLocalizer::estimate_pose(const Eigen::Matrix4d &init_pose, double heading){
 	DEBUG_MSG;
 	// ### I have to have options for particle filter,
 	// freedoms to update, initial pose etc...
-	_rbtl.estimate_pose(init_pose);
+	_rbtl.estimate_pose(init_pose, heading);
 	_vbtl.estimate_displacement(_x_disp);
 	/*
 	bool all_frames_present = true;
@@ -255,6 +255,10 @@ bool TunnelLocalizer::get_pose(Eigen::Matrix4d &pose){
 	double x_disp;
 	_vbtl.get_displacement(x_disp);
 	pose(0, 3) += x_disp;
+	static double total_x_disp = 0;
+	//cout << "x_disp : " << x_disp << endl;
+	total_x_disp += x_disp;
+	cout << "total_x_disp = " << total_x_disp << endl;
 	//cout << "pose = " << pose << endl;
 	DEBUG_MSG;
 	return true;

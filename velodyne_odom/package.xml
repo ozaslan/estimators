@@ -1,0 +1,35 @@
+<package>
+  <version>0.3.0</version>
+  <name>velodyne_odom</name>
+  <description>
+     This package uses Velodyne sensor, 
+     IMU and a downward facing range sensor 
+     to estimate 6DOF pose of a robot and 
+     generate the pointcloud map of the environment.
+  </description>
+  <author>Tolga Ozaslan</author>
+  <license>BSD</license>
+  <maintainer email="ozaslan@seas.upenn.edu">Tolga Ozaslan</maintainer>
+  
+  <build_depend>roscpp</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>pcl_ros</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>mavros</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>cv_bridge</build_depend>
+  <build_depend>utils</build_depend>
+
+  <run_depend>utils</run_depend>
+  <run_depend>mavros</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>pcl_ros</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>nav_msgs</run_depend>
+  <run_depend>cv_bridge</run_depend>
+  <run_depend>utils</run_depend>
+  <buildtool_depend>catkin</buildtool_depend>
+
+</package>
+
+

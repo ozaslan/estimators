@@ -1,0 +1,52 @@
+<!--
+
+-->
+
+<launch>
+
+<arg name="imu_velo_time_offset" value="0.25" />
+<arg name="exclude_x_pos" value="TRUE" />
+<arg name="temporal_kf_mode" value="TRUE" />
+<arg name="temporal_kf_interval" value="1.5" />
+
+<node pkg="tf" 
+      type="static_transform_publisher" 
+      name="fcu_link_publisher" 
+      args="0 0 0 0 0 0 fcu velodyne 100" />
+
+<node pkg ="velodyne_odom"
+      name="velodyne_odom_node"
+      type="velodyne_odom_node"
+      output="screen">
+
+      <rosparam file="$(find velodyne_odom)/config/velodyne_odom_params.yaml" />
+      <param name="debug_mode"        value = "false"        />
+      <param name="exclude_x_pos"        value = "$(arg exclude_x_pos)"        />
+      <param name="roll"        value = "0.655"        />
+      <param name="pitch"        value = "3.14"        />
+      <param name="yaw"        value = "-1.57"        />
+      <param name="imu_velo_time_offset" value = "$(arg imu_velo_time_offset)"/>
+      <param name="temporal_kf_mode" value = "$(arg temporal_kf_mode)"/>
+      <param name="temporal_kf_interval" value = "$(arg temporal_kf_interval)"/>
+      <remap from="~/imu"             to="/mavros/imu/data" />
+      <remap from="~/range"           to="/mavros/distance_sensor/hrlv_ez4_pub" />
+      <remap from="~/velodyne_points" to="/velodyne_point_cloud" />
+      <remap from="~/realsense_points" to="/realsense_points" />
+      <remap from="~/odom" to="/velodyne_odom" />
+      <remap from="~/init_odom" to="/Inspot/odom" />
+</node>
+
+<node name="quadrotor_ukf"
+      pkg ="quadrotor_ukf_lite"
+      type="quadrotor_ukf"
+      output="screen" >
+                         
+      <remap from="~imu" to="/mavros/imu/data"/>
+      <remap from="~odom_slam" to="/velodyne_odom"/>
+      <remap from="/control_odom" to="/Inspot/odom"/>
+      <rosparam file="$(find quadrotor_ukf_lite)/config/params.yaml"/>
+</node>
+
+
+
+</launch>

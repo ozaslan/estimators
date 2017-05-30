@@ -15,6 +15,9 @@
 #include <string>
 #include <sensor_msgs/LaserScan.h>
 
+#include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+
 #include <pcl_ros/point_cloud.h> // If you forget this, publish will give a serialization error.
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -58,7 +61,7 @@ class TunnelLocalizer{
     // reset(...) has to be called explicitely to flush the memory. Results of the esti-
     // mation can be retreived through get_pose(...) and get_covariance(...) functions.
     // ### Think for more alternative properties of this function.
-    bool estimate_pose(const Eigen::Matrix4d &init_pose);
+    bool estimate_pose(const Eigen::Matrix4d &init_pose, double heading);
     // This function calls the reset(...) functions of RangeBasedTunnelLocalizer and
     // VisionBasedTunnelLocalizer. Those functions reset the private variables including 
     // the cached/collective sensor data and some internal flags. For this reason, 
